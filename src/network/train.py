@@ -35,19 +35,7 @@ def create_shapenet_voxel_dataloader(dset_type_, data_base_dir_, batch_size_):
     return dataloader
 
 def create_model(network_type):
-  res_v = config.RESNET_LAYERS
-
-  if network_type == "VIEWPOINT":
-    model = models.viewpoint_net(layers=res_v, pretrained=config.PRETRAINED)
-  elif network_type == "VIEWPOINT_CLASS_DOMAIN":
-    model = models.vcd_net(layers=res_v, pretrained=config.PRETRAINED)
-    model.fc2_class = nn.Linear(model.fc2_class.in_features, config.NUM_OBJ_CLASSES)
-  elif network_type == "SIMPLE":
-    model = models.resnet_experiment(bottleneck_size=config.BOTTLENECK_SIZE, layers=res_v, pretrained=config.PRETRAINED)
-
-  # Adjust network size
-  model.fc_azi = nn.Linear(model.fc_azi.in_features, config.AZIMUTH_BINS)
-  model.fc_ele = nn.Linear(model.fc_ele.in_features, config.ELEVATION_BINS)
+  model = 3dAE(20, 64)
   return model
 
 def train_model(model, train_dataloader, regular_dataloader, val_dataloader, loss_f_viewpoint, loss_f_mmd, optimizer, explorer, epochs):
