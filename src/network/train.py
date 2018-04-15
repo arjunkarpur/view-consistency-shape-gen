@@ -23,14 +23,14 @@ def log_print(string):
     print "[%s]\t %s" % (datetime.datetime.now(), string)
 
 def create_shapenet_voxel_dataloader(dset_type_, data_base_dir_, batch_size_):
-    dataset = ShapeNetVoxelDataset( \
-        dset_type=dset_type_, \
-        data_base_dir=data_base_dir_, \
+    dataset = ShapeNetVoxelDataset(
+        dset_type=dset_type_,
+        data_base_dir=data_base_dir_,
         transform=transforms.Compose([transforms.ToTensor()]))
-    dataloader = DataLoader( \
-        dataset, \
-        batch_size=batch_size_, \
-        shuffle=True, \
+    dataloader = DataLoader(
+        dataset,
+        batch_size=batch_size_,
+        shuffle=True,
         num_workers=4)
     return dataloader
 
@@ -215,10 +215,9 @@ def main():
             config.DATA_BASE_DIR,
             config.BATCH_SIZE)
 
-    """
     # Set up model for training
     log_print("Creating model...")
-    model = create_model(config.NETWORK_TYPE)
+    model = create_model()
     if config.GPU and torch.cuda.is_available():
         log_print("Enabling GPU")
         if config.MULTI_GPU and torch.cuda.device_count() > 1:
