@@ -1,4 +1,9 @@
 *.pyc
 data/
 output/
-.*.*.swp
+*.swp
+
+./src/voxel/ShapeNet/
+./src/voxel/binvox
+./src/voxel/binvox-rw-py/
+./src/voxel/scripts/cmds.txt
