@@ -23,11 +23,10 @@ from models import AE_3D
 def log_print(string):
     print "[%s]\t %s" % (datetime.datetime.now(), string)
 
-def create_shapenet_voxel_dataloader(dset_type_, data_base_dir_, obj_class_, batch_size_):
+def create_shapenet_voxel_dataloader(dset_type_, data_base_dir_, batch_size_):
     dataset = ShapeNetVoxelDataset(
         dset_type=dset_type_,
         data_base_dir=data_base_dir_,
-        obj_class=obj_class_,
         transform=transforms.Compose([transforms.ToTensor()]))
     dataloader = DataLoader(
         dataset,
@@ -37,147 +36,93 @@ def create_shapenet_voxel_dataloader(dset_type_, data_base_dir_, obj_class_, bat
     return dataloader
 
 def create_model(voxel_res, embedding_size):
-  model = AE_3D(voxel_res, embedding_size)
-  return model
+    model = AE_3D(voxel_res, embedding_size)
+    return model
 
 def train_model(model, train_dataloader, val_dataloader, loss_f, optimizer, explorer, epochs):
 
-  """
-  init_time = time.time()
-  best_loss = best_az_err = best_ele_err = 0.0
-  best_weights = model.state_dict().copy()
-  best_epoch = -1
+    init_time = time.time()
+    best_loss = float('inf')
+    best_weights = model.state_dict().copy()
+    best_epoch = -1
 
-  for epoch in xrange(epochs):
-    log_print("Epoch %i/%i: %i batches of %i images each" % (epoch+1, epochs, len(train_dataloader.dataset)/config.BATCH_SIZE, config.BATCH_SIZE))
+    for epoch in xrange(epochs):
+        log_print("Epoch %i/%i: %i batches of %i images each" % (epoch+1, epochs, len(train_dataloader.dataset)/config.BATCH_SIZE, config.BATCH_SIZE))
 
-    for phase in ["train", "val"]:
-      if phase == "train":
-        explorer.step()
-        model.train(True)
-        dataloader = train_dataloader
-      else:
-        model.train(False)
-        dataloader = val_dataloader
+        for phase in ["train", "val"]:
+            if phase == "train":
+                explorer.step()
+                model.eval()
+                dataloader = train_dataloader
+            else:
+                model.train()
+                dataloader = val_dataloader
 
-      # Iterate over dataset
-      epoch_loss = epoch_az_err = epoch_ele_err = 0
-      curr_loss = curr_az_err = curr_ele_err = 0
-      print_interval = 100
-      batch_count = 0
+            # Iterate over dataset
+            epoch_loss = 0.0
+            curr_loss = 0.0
+            print_interval = 100
+            batch_count = 0
 
-      # Create regularizer dataloader iterator
-      if regular_dataloader is not None and phase == "train":
-        regular_iter = iter(regular_dataloader)
+            # Iterate through dataset
+            for data in dataloader:
 
-      for data in dataloader:
+                # Wrap as pytorch autograd Variable
+                voxels = data
+                if config.GPU and torch.cuda.is_available():
+                    voxels = voxels.cuda()
+                voxels = Variable(voxels)
 
-        # Gather batch data (images + corersponding annots)
-        im_fps, inputs, annot_azimuths, annot_elevations, annot_classes, annot_domains= \
-          data['image_fp'], data['image'], data['azimuth'], data['elevation'], data['class_id'], data['domain_id']
+                # Forward pass
+                optimizer.zero_grad()
+                out_voxels = model(voxels)
 
-        # Wrap as pytorch autograd Variable
-        if config.GPU and torch.cuda.is_available():
-          inputs = Variable(inputs.cuda())
-          annot_azimuths = Variable(annot_azimuths.cuda())
-          annot_elevations = Variable(annot_elevations.cuda())
-          annot_classes = Variable(annot_classes.cuda())
-          annot_domains = Variable(annot_domains.cuda())
-        else:
-          inputs = Variable(inputs)
-          annot_azimuths = Variable(annot_azimuths)
-          annot_elevations = Variable(annot_elevations)
-          annot_classes = Variable(annot_classes)
-          annot_domains = Variable(annot_domains)
+                """
+                # Calculate losses
+                loss = loss_f(out_voxels, voxels)
+                curr_loss += loss.data[0]
 
-        # Forward pass and calculate loss
-        optimizer.zero_grad()
-        out_azimuths, out_elevations = model(inputs)
+                # Calculate accuracy (IOU accuracy)
+                #TODO
 
-        # Regularizer
-        if regular_dataloader is not None and phase == "train":
-          embeddings = model.get_embedding()
-          while True:
-            regular_data = next(regular_iter)
-            if regular_data['azimuth'].size(0) == config.BATCH_SIZE:
-              break
-            regular_iter = iter(regular_dataloader)
+                # Backward pass (if train)
+                if phase == "train":
+                    loss.backward()
+                    optimizer.step()
+                """
+                curr_loss = 0
 
-          regular_inputs = regular_data['image']
-          if config.GPU and torch.cuda.is_available():
-            regular_inputs = Variable(regular_inputs.cuda())
-          else:
-            regular_inputs = Variable(regular_inputs)
-          _,_ = model(regular_inputs)
-          regular_embeddings = model.get_embedding()
-
-        # Calculate losses
-        loss_azimuth = loss_f_viewpoint(out_azimuths, annot_azimuths)
-        loss_elevation = loss_f_viewpoint(out_elevations, annot_elevations)
-        if regular_dataloader is not None and phase == "train":
-          loss_mmd = loss_f_mmd(embeddings, regular_embeddings)
-        else:
-          loss_mmd = 0
-        loss = (loss_azimuth + loss_elevation) + (config.LAMBDA_MMD * loss_mmd)
-        curr_loss += loss.data[0]
-
-        # Update accuracy
-        _, pred_azimuths = torch.max(out_azimuths.data, 1)
-        azimuth_diffs = torch.abs(pred_azimuths - annot_azimuths.data)
-        azimuth_errs = torch.min(azimuth_diffs, 360-azimuth_diffs)
-        curr_az_err += azimuth_errs.sum()
-        _, pred_elevations = torch.max(out_elevations.data, 1)
-        elevation_diffs = torch.abs(pred_elevations - annot_elevations.data)
-        elevation_errs = torch.min(elevation_diffs, 360-elevation_diffs)
-        curr_ele_err += elevation_errs.sum()
-        
-        # Backward pass (if train)
-        if phase == "train":
-          loss.backward()
-          optimizer.step()
-          if regular_dataloader is not None:
-            del embeddings, regular_embeddings
-
-        # Output
-        if batch_count % print_interval == 0 and batch_count != 0:
-          epoch_loss += curr_loss
-          epoch_az_err += curr_az_err
-          epoch_ele_err += curr_ele_err
-          if phase == "train":
-            curr_loss = float(curr_loss) / float(print_interval*config.BATCH_SIZE)
-            curr_az_err = float(curr_az_err) / float(print_interval*config.BATCH_SIZE)
-            curr_ele_err = float(curr_ele_err) / float(print_interval*config.BATCH_SIZE)
-            log_print("\tBatches %i-%i -\tLoss: %f \t Azimuth Err: %f   Elevation Err: %f" % (batch_count-print_interval+1, batch_count, curr_loss, curr_az_err, curr_ele_err))
-          curr_loss = curr_az_err = curr_ele_err = 0
-        batch_count += 1
+                # Output
+                if batch_count % print_interval == 0 and batch_count != 0:
+                    epoch_loss += curr_loss
+                    if phase == "train":
+                        curr_loss = float(curr_loss) / float(print_interval*config.BATCH_SIZE)
+                        log_print("\tBatches %i-%i -\tLoss: %f" % (batch_count-print_interval+1, batch_count, curr_loss))
+                    curr_loss = 0.0
+                    batch_count += 1
       
-      # Report epoch results
-      num_images = len(dataloader.dataset)
-      epoch_loss = float(epoch_loss+curr_loss) / float(num_images)
-      epoch_az_err = float(epoch_az_err+curr_az_err) / float(num_images)
-      epoch_ele_err = float(epoch_ele_err+curr_ele_err) / float(num_images)
-      log_print("\tEPOCH %i [%s] - Loss: %f   Azimuth Err: %f   Elevation Err: %f" % (epoch+1, phase, epoch_loss, epoch_az_err, epoch_ele_err))
+            # Report epoch results
+            num_images = len(dataloader.dataset)
+            epoch_loss = float(epoch_loss+curr_loss) / float(num_images)
+            log_print("\tEPOCH %i [%s] - Loss: %f" % (epoch+1, phase, epoch_loss))
 
-      # Save best model weights from epoch
-      err_improvement = (best_az_err - epoch_az_err) + (best_ele_err - epoch_ele_err)
-      if phase == "val" and (err_improvement >= 0 or epoch == 0):
-        log_print("BEST NEW EPOCH: %i" % epoch)
-        best_az_err = epoch_az_err
-        best_ele_err = epoch_ele_err
-        best_loss = epoch_loss
-        best_weights = model.state_dict().copy()
-        best_epoch = epoch
+            # Save best model weights from epoch
+            err_improvement = best_loss - epoch_loss 
+            if phase == "val" and (err_improvement >= 0 or epoch == 0):
+                log_print("\tBEST NEW EPOCH: Saving %i" % epoch)
+                best_loss = epoch_loss
+                best_weights = model.state_dict().copy()
+                best_epoch = epoch
 
-  # Finish up
-  time_elapsed = time.time() - init_time
-  log_print("BEST EPOCH: %i/%i - Loss: %f   Azimuth Err: %f   Elevation Err: %f" % (best_epoch+1, epochs, best_loss, best_az_err, best_ele_err))
-  log_print("Training completed in %sm %ss" % (time_elapsed // 60, time_elapsed % 60))
-  model.load_state_dict(best_weights)
-  """
-  return model
+    # Finish up
+    time_elapsed = time.time() - init_time
+    log_print("BEST EPOCH: %i/%i - Loss: %f" % (best_epoch+1, epochs, best_loss))
+    log_print("Training completed in %sm %ss" % (time_elapsed // 60, time_elapsed % 60))
+    model.load_state_dict(best_weights)
+    return model
 
 def save_model_weights(model, filepath):
-  torch.save(model.state_dict(), filepath)
+    torch.save(model.state_dict(), filepath)
 
 #####################
 #    END HELPERS    #
@@ -200,13 +145,11 @@ def main():
         create_shapenet_voxel_dataloader(
             "train",
             config.DATA_BASE_DIR,
-            config.OBJECT_CLASS,
             config.BATCH_SIZE) 
     val_dataloader = \
         create_shapenet_voxel_dataloader(
             "val",
             config.DATA_BASE_DIR,
-            config.OBJECT_CLASS,
             config.BATCH_SIZE)
 
     # Set up model for training

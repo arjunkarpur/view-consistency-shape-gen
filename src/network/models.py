@@ -25,8 +25,10 @@ class AE_3D(nn.Module):
         return;
 
     def forward(self, x):
-        embed = self._encode(x)
-        y = self._decode(embed)
+        # TODO
+        #embed = self._encode(x)
+        #y = self._decode(embed)
+        y = x
         return y
 
     def _encode(self, x):

@@ -14,10 +14,9 @@ class ShapeNetVoxelDataset(Dataset):
         - self.ids
     """
 
-    def __init__(self, dset_type, data_base_dir, obj_class, transform=None):
+    def __init__(self, dset_type, data_base_dir, transform=None):
         # Save input
         self.data_base_dir = data_base_dir
-        self.obj_class = obj_class
         self.transform = transform
 
         # Read train/val/test split json
@@ -36,6 +35,6 @@ class ShapeNetVoxelDataset(Dataset):
 
     def __getitem__(self, idx):
         id_ = self.ids[idx]
-        mat_fp = os.path.join(self.data_base_dir, obj_class, "mat", "%s.mat" % id_)
+        mat_fp = os.path.join(self.data_base_dir, "mat", "%s.mat" % id_)
         mat_data = scio.loadmat(mat_fp)
         return mat_data['data'].astype(int)
