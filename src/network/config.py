@@ -2,8 +2,9 @@
 RUN_NAME = "test"
 RUN_DESCRIPTION = "test"
 PROJ_BASE_DIR = "../.."
-DATA_BASE_DIR = "%s/data/CHAIR" % PROJ_BASE_DIR
-OUT_BASE_DIR = "%s/output/CHAIR" % PROJ_BASE_DIR
+OBJECT_CLASS = "CHAIR"
+DATA_BASE_DIR = "%s/data/%s" % (PROJ_BASE_DIR, OBJECT_CLASS)
+OUT_BASE_DIR = "%s/output/%s" % (PROJ_BASE_DIR, OBJECT_CLASS)
 OUT_WEIGHTS_FP = "%s/models/%s.pt" % (OUT_BASE_DIR, RUN_NAME)
 OUT_LOG_FP = "%s/logs/%s.log" % (OUT_BASE_DIR, RUN_NAME)
 OUT_PRED_FP = "%s/preds/%s.pred" % (OUT_BASE_DIR, RUN_NAME)
@@ -11,6 +12,7 @@ OUT_PRED_FP = "%s/preds/%s.pred" % (OUT_BASE_DIR, RUN_NAME)
 # Program parameters
 GPU = True
 MULTI_GPU = True
+VOXEL_RES = 20
 
 # Learning parameters
 NETWORK_TYPE = "SIMPLE"
@@ -22,6 +24,7 @@ LEARNING_RATE = 0.01
 MOMENTUM = 0.9
 STEP_SIZE = 4
 GAMMA = 0.1
+EMBED_SIZE = 64
 
 # Debugging print method
 def PRINT_CONFIG():
@@ -32,6 +35,7 @@ def PRINT_CONFIG():
   print "RUN_NAME:\t", RUN_NAME
   print "RUN_DESCRIP:\t", RUN_DESCRIPTION
   print "PROJ_BASE_DIR:\t", PROJ_BASE_DIR
+  print "OBJECT_CLASS:\t", OBJECT_CLASS
   print "DATA_BASE_DIR:\t", DATA_BASE_DIR
   print "OUT_BASE_DIR:\t", OUT_BASE_DIR
   print "OUT_WEIGHTS_FP:\t", OUT_WEIGHTS_FP
@@ -42,6 +46,7 @@ def PRINT_CONFIG():
   print "~~PROGRAM PARAMS~~"
   print "GPU:\t\t", GPU
   print "MULTI_GPU:\t", MULTI_GPU
+  print "VOXEL_RES:\t", VOXEL_RES
   print ""
 
   print "~~LEARNING PARAMS~~"
@@ -54,6 +59,7 @@ def PRINT_CONFIG():
   print "MOMENTUM:\t", MOMENTUM
   print "STEP_SIZE:\t", STEP_SIZE
   print "GAMMA:\t\t", GAMMA
+  print "EMBED_SIZE:\t", EMBED_SIZE
   print ""
 
   print "~~~~~~ END CONFIG ~~~~~~"

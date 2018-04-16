@@ -4,9 +4,9 @@ import torch.nn.functional as F
 import math
 import torch.utils.model_zoo as model_zoo
 
-class 3dAE(nn.Module):
+class AE_3D(nn.Module):
     def __init__(self, resolution=20, embed_space=64):
-        super(3dAE, self).__init__()
+        super(AE_3D, self).__init__()
 
         # Encoder
         self.conv1 = nn.Conv3d(1, 96, 11, stride=4)

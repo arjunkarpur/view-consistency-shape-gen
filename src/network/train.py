@@ -14,6 +14,7 @@ from torchvision import transforms
 
 # Imports from src files
 from datasets import ShapeNetVoxelDataset
+from models import AE_3D
 
 #####################
 #   BEGIN HELPERS   #
@@ -22,10 +23,11 @@ from datasets import ShapeNetVoxelDataset
 def log_print(string):
     print "[%s]\t %s" % (datetime.datetime.now(), string)
 
-def create_shapenet_voxel_dataloader(dset_type_, data_base_dir_, batch_size_):
+def create_shapenet_voxel_dataloader(dset_type_, data_base_dir_, obj_class_, batch_size_):
     dataset = ShapeNetVoxelDataset(
         dset_type=dset_type_,
         data_base_dir=data_base_dir_,
+        obj_class=obj_class_,
         transform=transforms.Compose([transforms.ToTensor()]))
     dataloader = DataLoader(
         dataset,
@@ -34,8 +36,8 @@ def create_shapenet_voxel_dataloader(dset_type_, data_base_dir_, batch_size_):
         num_workers=4)
     return dataloader
 
-def create_model(network_type):
-  model = 3dAE(20, 64)
+def create_model(voxel_res, embedding_size):
+  model = AE_3D(voxel_res, embedding_size)
   return model
 
 def train_model(model, train_dataloader, regular_dataloader, val_dataloader, loss_f_viewpoint, loss_f_mmd, optimizer, explorer, epochs):
@@ -196,25 +198,28 @@ def main():
         create_shapenet_voxel_dataloader(
             "train",
             config.DATA_BASE_DIR,
+            config.OBJECT_CLASS,
             config.BATCH_SIZE) 
     val_dataloader = \
         create_shapenet_voxel_dataloader(
             "val",
             config.DATA_BASE_DIR,
+            config.OBJECT_CLASS,
             config.BATCH_SIZE)
 
     # Set up model for training
     log_print("Creating model...")
-    model = create_model()
+    model = create_model(config.VOXEL_RES, config.EMBED_SIZE)
     if config.GPU and torch.cuda.is_available():
-        log_print("Enabling GPU")
+        log_print("\tEnabling GPU")
         if config.MULTI_GPU and torch.cuda.device_count() > 1:
-            log_print("Using multiple GPUs: %i" % torch.cuda.device_count())
+            log_print("\tUsing multiple GPUs: %i" % torch.cuda.device_count())
             model = nn.DataParallel(model)
         model = model.cuda()
     else:
-        log_print("Ignoring GPU (CPU only)")
+        log_print("\tIgnoring GPU (CPU only)")
 
+    """
     # Set up loss and optimizer
     loss_f_viewpoint = nn.CrossEntropyLoss()
     loss_f_mmd = MMDLoss()

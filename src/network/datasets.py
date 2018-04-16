@@ -3,9 +3,10 @@ import cv2
 import json
 import torch
 import numpy as np
+import scipy.io as scio
 from torch.utils.data import Dataset 
-class ShapeNetVoxelDataset(Dataset):
 
+class ShapeNetVoxelDataset(Dataset):
     """
     Instance vars:
         - self.data_base_dir (string with root data dir)
@@ -13,9 +14,10 @@ class ShapeNetVoxelDataset(Dataset):
         - self.ids
     """
 
-    def __init__(self, dset_type, data_base_dir, transform=None):
+    def __init__(self, dset_type, data_base_dir, obj_class, transform=None):
         # Save input
         self.data_base_dir = data_base_dir
+        self.obj_class = obj_class
         self.transform = transform
 
         # Read train/val/test split json
@@ -27,11 +29,13 @@ class ShapeNetVoxelDataset(Dataset):
         # Extract list of ids
         assert(dset_type in split_json)
         self.ids = split_json[dset_type]
-        print len(self.ids)
+        return
 
     def __len__(self):
         return len(self.ids)
 
     def __getitem__(self, idx):
-        #TODO 
-        return None
+        id_ = self.ids[idx]
+        mat_fp = os.path.join(self.data_base_dir, obj_class, "mat", "%s.mat" % id_)
+        mat_data = scio.loadmat(mat_fp)
+        return mat_data['data']
