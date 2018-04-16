@@ -77,20 +77,17 @@ def train_model(model, train_dataloader, val_dataloader, loss_f, optimizer, expl
                 optimizer.zero_grad()
                 out_voxels = model(voxels)
 
-                """
-                # Calculate losses
-                loss = loss_f(out_voxels, voxels)
+                # Calculate loss
+                loss = loss_f(out_voxels.float(), voxels.float())
                 curr_loss += loss.data[0]
+                #TODO: Calculate accuracy (IOU accuracy)
 
-                # Calculate accuracy (IOU accuracy)
-                #TODO
-
+                """
                 # Backward pass (if train)
                 if phase == "train":
                     loss.backward()
                     optimizer.step()
                 """
-                curr_loss = 0
 
                 # Output
                 if batch_count % print_interval == 0 and batch_count != 0:

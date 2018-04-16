@@ -1,6 +1,7 @@
 from torch.autograd import Function
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.autograd import Variable
 import math
 import torch.utils.model_zoo as model_zoo
 
@@ -28,8 +29,7 @@ class AE_3D(nn.Module):
         # TODO
         #embed = self._encode(x)
         #y = self._decode(embed)
-        y = x
-        return y
+        return x
 
     def _encode(self, x):
         x = self.maxpool1(F.relu(self.conv1(x)))
