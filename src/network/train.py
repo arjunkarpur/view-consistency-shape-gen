@@ -40,8 +40,9 @@ def create_model(voxel_res, embedding_size):
   model = AE_3D(voxel_res, embedding_size)
   return model
 
-def train_model(model, train_dataloader, regular_dataloader, val_dataloader, loss_f_viewpoint, loss_f_mmd, optimizer, explorer, epochs):
+def train_model(model, train_dataloader, val_dataloader, loss_f, optimizer, explorer, epochs):
 
+  """
   init_time = time.time()
   best_loss = best_az_err = best_ele_err = 0.0
   best_weights = model.state_dict().copy()
@@ -172,6 +173,7 @@ def train_model(model, train_dataloader, regular_dataloader, val_dataloader, los
   log_print("BEST EPOCH: %i/%i - Loss: %f   Azimuth Err: %f   Elevation Err: %f" % (best_epoch+1, epochs, best_loss, best_az_err, best_ele_err))
   log_print("Training completed in %sm %ss" % (time_elapsed // 60, time_elapsed % 60))
   model.load_state_dict(best_weights)
+  """
   return model
 
 def save_model_weights(model, filepath):
@@ -219,13 +221,10 @@ def main():
     else:
         log_print("\tIgnoring GPU (CPU only)")
 
-    """
     # Set up loss and optimizer
-    loss_f_viewpoint = nn.CrossEntropyLoss()
-    loss_f_mmd = MMDLoss()
+    loss_f = nn.BCELoss()
     if config.GPU and torch.cuda.is_available():
-        loss_f_viewpoint  = loss_f_viewpoint.cuda()
-        loss_f_mmd = loss_f_mmd.cuda()
+        loss_f = loss_f.cuda()
     optimizer = optim.SGD(
         model.parameters(), 
         lr=config.LEARNING_RATE,
@@ -236,13 +235,13 @@ def main():
         gamma=config.GAMMA)
 
     # Perform training
-    log_print("!!!!!Starting training!!!!!")
-    model = train_model(model, train_dataloader, regular_dataloader, val_dataloader, loss_f_viewpoint, loss_f_mmd, optimizer, explorer, config.EPOCHS)
+    log_print("~~~~~Starting training~~~~~")
+    model = train_model(model, train_dataloader, val_dataloader, loss_f, optimizer, explorer, config.EPOCHS)
+    log_print("~~~~~Training finished~~~~~")
   
     # Save model weights
     log_print("Saving model weights to %s..." % config.OUT_WEIGHTS_FP)
     save_model_weights(model, config.OUT_WEIGHTS_FP)
-    """
 
     log_print("Script DONE!")
 

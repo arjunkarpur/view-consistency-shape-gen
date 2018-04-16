@@ -38,4 +38,4 @@ class ShapeNetVoxelDataset(Dataset):
         id_ = self.ids[idx]
         mat_fp = os.path.join(self.data_base_dir, obj_class, "mat", "%s.mat" % id_)
         mat_data = scio.loadmat(mat_fp)
-        return mat_data['data']
+        return mat_data['data'].astype(int)
