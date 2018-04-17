@@ -5,7 +5,7 @@ PROJ_BASE_DIR = "../.."
 OBJECT_CLASS = "CHAIR"
 DATA_BASE_DIR = "%s/data/%s" % (PROJ_BASE_DIR, OBJECT_CLASS)
 OUT_BASE_DIR = "%s/output/%s" % (PROJ_BASE_DIR, OBJECT_CLASS)
-OUT_WEIGHTS_FP = "%s/models/%s.pt" % (OUT_BASE_DIR, RUN_NAME)
+OUT_WEIGHTS_DIR = "%s/models/" % OUT_BASE_DIR
 OUT_LOG_FP = "%s/logs/%s.log" % (OUT_BASE_DIR, RUN_NAME)
 OUT_PRED_FP = "%s/preds/%s.pred" % (OUT_BASE_DIR, RUN_NAME)
 
@@ -16,8 +16,8 @@ VOXEL_RES = 20
 
 # Learning parameters
 BATCH_SIZE = 32
-EPOCHS = 20
-LEARNING_RATE = 1e-3
+EPOCHS = 25
+LEARNING_RATE = 1e-6
 MOMENTUM = 0.9
 STEP_SIZE = 4
 GAMMA = 0.1
@@ -35,7 +35,7 @@ def PRINT_CONFIG():
   print "OBJECT_CLASS:\t", OBJECT_CLASS
   print "DATA_BASE_DIR:\t", DATA_BASE_DIR
   print "OUT_BASE_DIR:\t", OUT_BASE_DIR
-  print "OUT_WEIGHTS_FP:\t", OUT_WEIGHTS_FP
+  print "OUT_WEIGHTS_DIR:\t", OUT_WEIGHTS_DIR
   print "OUT_LOG_FP:\t", OUT_LOG_FP
   print "OUT_PRED_FP:\t", OUT_PRED_FP
   print " "
