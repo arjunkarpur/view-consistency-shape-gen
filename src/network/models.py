@@ -9,51 +9,48 @@ class AE_3D(nn.Module):
     def __init__(self, resolution=20, embed_space=64):
         super(AE_3D, self).__init__()
 
-        # Encoder
-        self.conv1 = nn.Conv3d(1, 96, 11, stride=4)
-        self.maxpool1 = nn.MaxPool3d(3, stride=2)
-        self.conv2 = nn.Conv3d(96, 256, 5, padding=2, groups=2)
-        self.maxpool2 = nn.MaxPool3d(3, stride=2)
-        self.conv3 = nn.Conv3d(256, 384, 3, padding=1)
-        self.conv4 = nn.Conv3d(384, 384, 3, padding=1, groups=2)
-        self.conv5 = nn.Conv3d(384, 256, 3, padding=1, groups=2)
-        self.maxpool5 = nn.MaxPool3d(3, stride=2)
-        self.fc6 = nn.Linear(256*6*6*6, 4096)
-        self.fc7_embed = nn.Linear(4096, embed_space)
+        # Save input vars
+        self.res = resolution
+        self.embed_space = embed_space
 
-        # Reconstruct
-        self.fc_reconstruct = nn.Linear(embed_space, 216)
+        # Setup encoder
+        self.conv1_3d = nn.Conv3d(1, 96, 7)
+        self.conv2_3d = nn.Conv3d(96, 256, 5)
+        self.conv3_3d = nn.Conv3d(256, 384, 3)
+        self.conv4_3d = nn.Conv3d(384, 256, 3)
+        self.fc5_embed = nn.Linear(256*6*6*6, embed_space)
 
-        # Decoder
-        self.deconv1 = nn.ConvTranspose3d(1, 256, 3)
-        self.deconv2 = nn.ConvTranspose3d(256, 384, 3)
-        self.deconv3 = nn.ConvTranspose3d(384, 256, 5)
-        self.deconv4 = nn.ConvTranpose3d(256, 96, 7)
-        self.deconv5 = nn.ConvTranspose3d(96, 1, 1)
+        # Setup decoder
+        self.fc6_reconstruct = nn.Linear(embed_space, 216)
+        self.deconv4_3d = nn.ConvTranspose3d(1, 256, 3)
+        self.deconv3_3d = nn.ConvTranspose3d(256, 384, 3)
+        self.deconv2_3d = nn.ConvTranspose3d(384, 256, 5)
+        self.deconv1_3d = nn.ConvTranspose3d(256, 96, 7)
+        self.deconv0_3d = nn.ConvTranspose3d(96, 1, 1)
         return;
 
     def forward(self, x):
+        x = x.view(x.size(0), 1, self.res, self.res, self.res)
         x = self._encode(x)
-        x = self.fc_reconstruct(x)
         x = self._decode(x)
-        return y
+        return x
 
     def _encode(self, x):
-        x = self.maxpool1(F.relu(self.conv1(x)))
-        x = self.maxpool2(F.relu(self.conv2(x)))
-        x = F.relu(self.conv3(x))
-        x = F.relu(self.conv4(x))
-        x = self.maxpool5(F.relu(self.conv5(x)))
+        x = F.leaky_relu(self.conv1_3d(x))
+        x = F.leaky_relu(self.conv2_3d(x))
+        x = F.leaky_relu(self.conv3_3d(x))
+        x = F.leaky_relu(self.conv4_3d(x))
         x = x.view(x.size(0), -1)
-        x = F.dropout(F.relu(self.fc6(x)))
-        x = self.fc7_embed(x)
+        x = self.fc5_embed(x)
         return x
 
     def _decode(self, x):
-        x = x.view(x.size(0), 6, 6, 6)
-        x = F.prelu(self.deconv1(x))
-        x = F.prelu(self.deconv2(x))
-        x = F.prelu(self.deconv3(x))
-        x = F.prelu(self.deconv4(x))
-        x = F.sigmoid(self.deconv5(x))
+        x = self.fc6_reconstruct(x)
+        x = x.view(x.size(0), 1, 6, 6, 6)
+        x = F.leaky_relu(self.deconv4_3d(x))
+        x = F.leaky_relu(self.deconv3_3d(x))
+        x = F.leaky_relu(self.deconv2_3d(x))
+        x = F.leaky_relu(self.deconv1_3d(x))
+        x = F.sigmoid(self.deconv0_3d(x))
+        x = x.view(x.size(0), x.size(2), x.size(3), x.size(4))
         return x

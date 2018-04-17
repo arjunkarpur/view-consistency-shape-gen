@@ -61,17 +61,18 @@ def train_model(model, train_dataloader, val_dataloader, loss_f, optimizer, expl
             # Iterate over dataset
             epoch_loss = 0.0
             curr_loss = 0.0
-            print_interval = 100
+            print_interval = 20
+            epoch_checkpoint = 20
             batch_count = 0
 
             # Iterate through dataset
             for data in dataloader:
 
                 # Wrap as pytorch autograd Variable
-                voxels = data
+                voxels = data['data']
                 if config.GPU and torch.cuda.is_available():
                     voxels = voxels.cuda()
-                voxels = Variable(voxels)
+                voxels = Variable(voxels).float()
 
                 # Forward pass
                 optimizer.zero_grad()
@@ -79,15 +80,13 @@ def train_model(model, train_dataloader, val_dataloader, loss_f, optimizer, expl
 
                 # Calculate loss
                 loss = loss_f(out_voxels.float(), voxels.float())
-                curr_loss += loss.data[0]
+                curr_loss += config.BATCH_SIZE * loss.data[0]
                 #TODO: Calculate accuracy (IOU accuracy)
 
-                """
                 # Backward pass (if train)
                 if phase == "train":
                     loss.backward()
                     optimizer.step()
-                """
 
                 # Output
                 if batch_count % print_interval == 0 and batch_count != 0:
@@ -96,7 +95,7 @@ def train_model(model, train_dataloader, val_dataloader, loss_f, optimizer, expl
                         curr_loss = float(curr_loss) / float(print_interval*config.BATCH_SIZE)
                         log_print("\tBatches %i-%i -\tLoss: %f" % (batch_count-print_interval+1, batch_count, curr_loss))
                     curr_loss = 0.0
-                    batch_count += 1
+                batch_count += 1
       
             # Report epoch results
             num_images = len(dataloader.dataset)
@@ -111,6 +110,12 @@ def train_model(model, train_dataloader, val_dataloader, loss_f, optimizer, expl
                 best_weights = model.state_dict().copy()
                 best_epoch = epoch
 
+            # Checkpoint epoch weights
+            if (epoch % epoch_checkpoint == 0) and (epoch != 0):
+                log_print("\tCheckpointing weights for epoch %i" % epoch)
+                fp = os.path.join(config.OUT_WEIGHTS_DIR, "%s_%i.pt" % (config.RUN_NAME, epoch))
+                save_model_weights(model, fp)
+
     # Finish up
     time_elapsed = time.time() - init_time
     log_print("BEST EPOCH: %i/%i - Loss: %f" % (best_epoch+1, epochs, best_loss))
@@ -119,7 +124,7 @@ def train_model(model, train_dataloader, val_dataloader, loss_f, optimizer, expl
     return model
 
 def save_model_weights(model, filepath):
-    torch.save(model.state_dict(), filepath)
+    torch.save(model.state_dict().copy(), filepath)
 
 #####################
 #    END HELPERS    #
@@ -128,8 +133,8 @@ def save_model_weights(model, filepath):
 def main():
 
     # Redirect output to log file
-    #sys.stdout = open(config.OUT_LOG_FP, 'w')
-    #sys.stderr = sys.stdout
+    sys.stdout = open(config.OUT_LOG_FP, 'w')
+    sys.stderr = sys.stdout
     log_print("Beginning script...")
 
     # Print beginning debug info
@@ -180,8 +185,9 @@ def main():
     log_print("~~~~~Training finished~~~~~")
   
     # Save model weights
-    log_print("Saving model weights to %s..." % config.OUT_WEIGHTS_FP)
-    save_model_weights(model, config.OUT_WEIGHTS_FP)
+    out_fp = os.path.join(config.OUT_WEIGHTS_DIR, "%s.pt" % config.RUN_NAME)
+    log_print("Saving model weights to %s..." % out_fp)
+    save_model_weights(model, out_fp)
 
     log_print("Script DONE!")
 

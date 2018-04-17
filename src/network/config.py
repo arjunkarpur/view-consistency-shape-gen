@@ -1,11 +1,11 @@
 # Filepaths
-RUN_NAME = "test"
+RUN_NAME = "test-ae3d"
 RUN_DESCRIPTION = "test"
 PROJ_BASE_DIR = "../.."
 OBJECT_CLASS = "CHAIR"
 DATA_BASE_DIR = "%s/data/%s" % (PROJ_BASE_DIR, OBJECT_CLASS)
 OUT_BASE_DIR = "%s/output/%s" % (PROJ_BASE_DIR, OBJECT_CLASS)
-OUT_WEIGHTS_FP = "%s/models/%s.pt" % (OUT_BASE_DIR, RUN_NAME)
+OUT_WEIGHTS_DIR = "%s/models/" % OUT_BASE_DIR
 OUT_LOG_FP = "%s/logs/%s.log" % (OUT_BASE_DIR, RUN_NAME)
 OUT_PRED_FP = "%s/preds/%s.pred" % (OUT_BASE_DIR, RUN_NAME)
 
@@ -15,12 +15,9 @@ MULTI_GPU = True
 VOXEL_RES = 20
 
 # Learning parameters
-NETWORK_TYPE = "SIMPLE"
-RESNET_LAYERS = 18 #18, 34, 50, 101, 152
-PRETRAINED = True
 BATCH_SIZE = 32
-EPOCHS = 10
-LEARNING_RATE = 0.01
+EPOCHS = 25
+LEARNING_RATE = 1e-6
 MOMENTUM = 0.9
 STEP_SIZE = 4
 GAMMA = 0.1
@@ -38,7 +35,7 @@ def PRINT_CONFIG():
   print "OBJECT_CLASS:\t", OBJECT_CLASS
   print "DATA_BASE_DIR:\t", DATA_BASE_DIR
   print "OUT_BASE_DIR:\t", OUT_BASE_DIR
-  print "OUT_WEIGHTS_FP:\t", OUT_WEIGHTS_FP
+  print "OUT_WEIGHTS_DIR:\t", OUT_WEIGHTS_DIR
   print "OUT_LOG_FP:\t", OUT_LOG_FP
   print "OUT_PRED_FP:\t", OUT_PRED_FP
   print " "
@@ -50,9 +47,6 @@ def PRINT_CONFIG():
   print ""
 
   print "~~LEARNING PARAMS~~"
-  print "NETWORK_TYPE:\t", NETWORK_TYPE
-  print "RESNET_LAYERS:\t", RESNET_LAYERS
-  print "PRETRAINED:\t", PRETRAINED
   print "BATCH_SIZE:\t", BATCH_SIZE
   print "EPOCHS:\t\t", EPOCHS
   print "LEARNING_RATE:\t", LEARNING_RATE
