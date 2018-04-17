@@ -21,15 +21,22 @@ class AE_3D(nn.Module):
         self.fc6 = nn.Linear(256*6*6*6, 4096)
         self.fc7_embed = nn.Linear(4096, embed_space)
 
+        # Reconstruct
+        self.fc_reconstruct = nn.Linear(embed_space, 216)
+
         # Decoder
-        #TODO
+        self.deconv1 = nn.ConvTranspose3d(1, 256, 3)
+        self.deconv2 = nn.ConvTranspose3d(256, 384, 3)
+        self.deconv3 = nn.ConvTranspose3d(384, 256, 5)
+        self.deconv4 = nn.ConvTranpose3d(256, 96, 7)
+        self.deconv5 = nn.ConvTranspose3d(96, 1, 1)
         return;
 
     def forward(self, x):
-        # TODO
-        #embed = self._encode(x)
-        #y = self._decode(embed)
-        return x
+        x = self._encode(x)
+        x = self.fc_reconstruct(x)
+        x = self._decode(x)
+        return y
 
     def _encode(self, x):
         x = self.maxpool1(F.relu(self.conv1(x)))
@@ -43,5 +50,10 @@ class AE_3D(nn.Module):
         return x
 
     def _decode(self, x):
-        #TODO
-        pass
+        x = x.view(x.size(0), 6, 6, 6)
+        x = F.prelu(self.deconv1(x))
+        x = F.prelu(self.deconv2(x))
+        x = F.prelu(self.deconv3(x))
+        x = F.prelu(self.deconv4(x))
+        x = F.sigmoid(self.deconv5(x))
+        return x
