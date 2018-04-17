@@ -21,8 +21,10 @@ MULTI_GPU = True
 OBJ_CLASS = "CHAIR"
 DATA_BASE_DIR = "../../data/%s" % OBJ_CLASS
 IN_WEIGHTS_FP = "../../output/%s/models/test-ae3d.pt" % OBJ_CLASS
-OUTPUT_PROB_DIR = "../../output/%s/preds/prob" % OBJ_CLASS
-OUTPUT_BINARY_DIR = "../../output/%s/preds/binary" % OBJ_CLASS
+NAME = (IN_WEIGHTS_FP.split("/")[-1]).split(".")[0]
+OUTPUT_DIR = "../../output/%s/preds/%s" % (OBJ_CLASS, NAME)
+OUTPUT_PROB_DIR = "%s/prob" % OUTPUT_DIR
+OUTPUT_BINARY_DIR = "%s/binary" % OUTPUT_DIR
 
 VOXEL_RES = 20
 EMBED_SIZE = 64
@@ -54,6 +56,15 @@ def create_model(voxel_res, embedding_size):
 
 def write_mats(predictions):
 
+    # Make dirs
+    if not os.path.exists(OUTPUT_DIR):
+        os.makedirs(OUTPUT_DIR)
+    if not os.path.exists(OUTPUT_PROB_DIR):
+        os.makedirs(OUTPUT_PROB_DIR)
+    if not os.path.exists(OUTPUT_BINARY_DIR):
+        os.makedirs(OUTPUT_BINARY_DIR)
+
+    # Write mats
     for id_ in predictions:
         prob_fp = str(os.path.join(OUTPUT_PROB_DIR, "%s.mat" % id_))
         scio.savemat(prob_fp, {"id":id_, "data":predictions[id_]})
@@ -87,9 +98,10 @@ def test_model(model, test_dataloader, loss_f):
         #TODO: Calculate accuracy (IOU accuracy)
 
         # Save out voxels
+        out_voxels = out_voxels.cpu()
         for i in xrange(0, out_voxels.size(0)):
             id_ = data['id'][i]
-            out_vox = out_voxels[i].data
+            out_vox = out_voxels[i].data.numpy()
             preds[id_] = out_vox
 
     # Report results
