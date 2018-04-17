@@ -1,5 +1,5 @@
 # Filepaths
-RUN_NAME = "test"
+RUN_NAME = "test-ae3d"
 RUN_DESCRIPTION = "test"
 PROJ_BASE_DIR = "../.."
 OBJECT_CLASS = "CHAIR"
@@ -15,12 +15,9 @@ MULTI_GPU = True
 VOXEL_RES = 20
 
 # Learning parameters
-NETWORK_TYPE = "SIMPLE"
-RESNET_LAYERS = 18 #18, 34, 50, 101, 152
-PRETRAINED = True
 BATCH_SIZE = 32
-EPOCHS = 10
-LEARNING_RATE = 0.01
+EPOCHS = 20
+LEARNING_RATE = 1e-3
 MOMENTUM = 0.9
 STEP_SIZE = 4
 GAMMA = 0.1
@@ -50,9 +47,6 @@ def PRINT_CONFIG():
   print ""
 
   print "~~LEARNING PARAMS~~"
-  print "NETWORK_TYPE:\t", NETWORK_TYPE
-  print "RESNET_LAYERS:\t", RESNET_LAYERS
-  print "PRETRAINED:\t", PRETRAINED
   print "BATCH_SIZE:\t", BATCH_SIZE
   print "EPOCHS:\t\t", EPOCHS
   print "LEARNING_RATE:\t", LEARNING_RATE

@@ -61,7 +61,7 @@ def train_model(model, train_dataloader, val_dataloader, loss_f, optimizer, expl
             # Iterate over dataset
             epoch_loss = 0.0
             curr_loss = 0.0
-            print_interval = 100
+            print_interval = 20
             batch_count = 0
 
             # Iterate through dataset
@@ -82,12 +82,10 @@ def train_model(model, train_dataloader, val_dataloader, loss_f, optimizer, expl
                 curr_loss += loss.data[0]
                 #TODO: Calculate accuracy (IOU accuracy)
 
-                """
                 # Backward pass (if train)
                 if phase == "train":
                     loss.backward()
                     optimizer.step()
-                """
 
                 # Output
                 if batch_count % print_interval == 0 and batch_count != 0:
@@ -96,7 +94,7 @@ def train_model(model, train_dataloader, val_dataloader, loss_f, optimizer, expl
                         curr_loss = float(curr_loss) / float(print_interval*config.BATCH_SIZE)
                         log_print("\tBatches %i-%i -\tLoss: %f" % (batch_count-print_interval+1, batch_count, curr_loss))
                     curr_loss = 0.0
-                    batch_count += 1
+                batch_count += 1
       
             # Report epoch results
             num_images = len(dataloader.dataset)
@@ -128,8 +126,8 @@ def save_model_weights(model, filepath):
 def main():
 
     # Redirect output to log file
-    #sys.stdout = open(config.OUT_LOG_FP, 'w')
-    #sys.stderr = sys.stdout
+    sys.stdout = open(config.OUT_LOG_FP, 'w')
+    sys.stderr = sys.stdout
     log_print("Beginning script...")
 
     # Print beginning debug info
