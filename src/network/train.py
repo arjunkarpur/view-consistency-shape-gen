@@ -71,7 +71,7 @@ def train_model(model, train_dataloader, val_dataloader, loss_f, optimizer, expl
                 voxels = data
                 if config.GPU and torch.cuda.is_available():
                     voxels = voxels.cuda()
-                voxels = Variable(voxels)
+                voxels = Variable(voxels).float()
 
                 # Forward pass
                 optimizer.zero_grad()

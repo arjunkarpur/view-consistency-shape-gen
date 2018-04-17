@@ -9,6 +9,10 @@ class AE_3D(nn.Module):
     def __init__(self, resolution=20, embed_space=64):
         super(AE_3D, self).__init__()
 
+        # Save input vars
+        self.res = resolution
+        self.embed_space = embed_space
+
         # Encoder
         self.conv1 = nn.Conv3d(1, 96, 11, stride=4)
         self.maxpool1 = nn.MaxPool3d(3, stride=2)
@@ -28,11 +32,12 @@ class AE_3D(nn.Module):
         self.deconv1 = nn.ConvTranspose3d(1, 256, 3)
         self.deconv2 = nn.ConvTranspose3d(256, 384, 3)
         self.deconv3 = nn.ConvTranspose3d(384, 256, 5)
-        self.deconv4 = nn.ConvTranpose3d(256, 96, 7)
+        self.deconv4 = nn.ConvTranspose3d(256, 96, 7)
         self.deconv5 = nn.ConvTranspose3d(96, 1, 1)
         return;
 
     def forward(self, x):
+        x = x.view(x.size(0), 1, self.res, self.res, self.res)
         x = self._encode(x)
         x = self.fc_reconstruct(x)
         x = self._decode(x)
