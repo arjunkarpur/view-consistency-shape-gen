@@ -1,7 +1,7 @@
 import os
 
 size = 20
-base_dir = "../ShapeNet/CHAIR/obj"
+base_dir = "./ShapeNet/CHAIR/obj"
 
 cmds = []
 for root, dirs, files in os.walk(base_dir):

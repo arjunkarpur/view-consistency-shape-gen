@@ -1,7 +1,7 @@
 import os
 
 synset = "03001627"
-base_dir = "../ShapeNet"
+base_dir = "./ShapeNet"
 raw_dir = os.path.join(base_dir, "raw", synset)
 dest_dir = os.path.join(base_dir, "CHAIR", "obj")
 

@@ -4,8 +4,8 @@ import binvox_rw
 import os
 import scipy.io as sio
 
-src_dir = "../ShapeNet/CHAIR/binvox"
-dest_dir = "../ShapeNet/CHAIR/mat"
+src_dir = "./ShapeNet/CHAIR/binvox"
+dest_dir = "./ShapeNet/CHAIR/mat"
 
 for root, dirs, files in os.walk(src_dir):
     for fn in files:
