@@ -62,7 +62,7 @@ def train_model(model, train_dataloader, val_dataloader, loss_f, optimizer, expl
             epoch_loss = 0.0
             curr_loss = 0.0
             print_interval = 20
-            epoch_checkpoint = 20
+            epoch_checkpoint = config.WEIGHTS_CHECKPOINT
             batch_count = 0
 
             # Iterate through dataset
@@ -93,14 +93,14 @@ def train_model(model, train_dataloader, val_dataloader, loss_f, optimizer, expl
                     epoch_loss += curr_loss
                     if phase == "train":
                         curr_loss = float(curr_loss) / float(print_interval*config.BATCH_SIZE)
-                        log_print("\tBatches %i-%i -\tLoss: %f" % (batch_count-print_interval+1, batch_count, curr_loss))
+                        log_print("\tBatches %i-%i -\tAvg Loss: %f" % (batch_count-print_interval+1, batch_count, curr_loss))
                     curr_loss = 0.0
                 batch_count += 1
       
             # Report epoch results
             num_images = len(dataloader.dataset)
             epoch_loss = float(epoch_loss+curr_loss) / float(num_images)
-            log_print("\tEPOCH %i [%s] - Loss: %f" % (epoch+1, phase, epoch_loss))
+            log_print("\tEPOCH %i [%s] - Avg Loss: %f" % (epoch+1, phase, epoch_loss))
 
             # Save best model weights from epoch
             err_improvement = best_loss - epoch_loss 

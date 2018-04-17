@@ -13,6 +13,7 @@ OUT_PRED_FP = "%s/preds/%s.pred" % (OUT_BASE_DIR, RUN_NAME)
 GPU = True
 MULTI_GPU = True
 VOXEL_RES = 20
+WEIGHTS_CHECKPOINT = 20
 
 # Learning parameters
 BATCH_SIZE = 32
