@@ -1,5 +1,5 @@
 import sys
-sys.path.append("../binvox-rw-py")
+sys.path.append("./binvox-rw-py")
 import binvox_rw
 import os
 import scipy.io as sio
@@ -13,7 +13,7 @@ for root, dirs, files in os.walk(src_dir):
             m = binvox_rw.read_as_3d_array(f)
         name = fn.split(".")[0]
         data = {
-            "name": name,
+            "id": name,
             "data": m.data,
             "dims": m.dims,
             "translate": m.translate,

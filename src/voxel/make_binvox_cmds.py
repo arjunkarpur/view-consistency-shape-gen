@@ -6,7 +6,7 @@ base_dir = "./ShapeNet/CHAIR/obj"
 cmds = []
 for root, dirs, files in os.walk(base_dir):
     for f in files:
-        cmd = "../binvox -pb -cb -d %i %s" % \
+        cmd = "./binvox -e -pb -cb -d %i -rotx %s" % \
             (size, os.path.join(base_dir, f))
         cmds.append(cmd)
     break
