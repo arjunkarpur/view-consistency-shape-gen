@@ -68,7 +68,7 @@ def train_model(model, train_dataloader, val_dataloader, loss_f, optimizer, expl
             for data in dataloader:
 
                 # Wrap as pytorch autograd Variable
-                voxels = data
+                voxels = data['data']
                 if config.GPU and torch.cuda.is_available():
                     voxels = voxels.cuda()
                 voxels = Variable(voxels).float()
@@ -79,7 +79,7 @@ def train_model(model, train_dataloader, val_dataloader, loss_f, optimizer, expl
 
                 # Calculate loss
                 loss = loss_f(out_voxels.float(), voxels.float())
-                curr_loss += loss.data[0]
+                curr_loss += config.BATCH_SIZE * loss.data[0]
                 #TODO: Calculate accuracy (IOU accuracy)
 
                 # Backward pass (if train)
