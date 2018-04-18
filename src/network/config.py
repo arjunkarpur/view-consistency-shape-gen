@@ -1,26 +1,26 @@
 # Filepaths
-RUN_NAME = "test-ae3d"
-RUN_DESCRIPTION = "test"
+RUN_NAME = "chair-ae3d-long"
+RUN_DESCRIPTION = "training 3d auto-encoder on chair voxels. long version (200 epochs w/ low learning rate)."
 PROJ_BASE_DIR = "../.."
 OBJECT_CLASS = "CHAIR"
 DATA_BASE_DIR = "%s/data/%s" % (PROJ_BASE_DIR, OBJECT_CLASS)
 OUT_BASE_DIR = "%s/output/%s" % (PROJ_BASE_DIR, OBJECT_CLASS)
-OUT_WEIGHTS_DIR = "%s/models/" % OUT_BASE_DIR
+OUT_WEIGHTS_DIR = "%s/models/%s" % (OUT_BASE_DIR, RUN_NAME)
 OUT_LOG_FP = "%s/logs/%s.log" % (OUT_BASE_DIR, RUN_NAME)
-OUT_PRED_FP = "%s/preds/%s.pred" % (OUT_BASE_DIR, RUN_NAME)
 
 # Program parameters
 GPU = True
 MULTI_GPU = True
-VOXEL_RES = 20
 WEIGHTS_CHECKPOINT = 20
+VOXEL_RES = 20
+IOU_THRESH = 0.5
 
 # Learning parameters
 BATCH_SIZE = 32
-EPOCHS = 25
+EPOCHS = 200
 LEARNING_RATE = 1e-6
 MOMENTUM = 0.9
-STEP_SIZE = 4
+STEP_SIZE = 201
 GAMMA = 0.1
 EMBED_SIZE = 64
 
@@ -36,15 +36,16 @@ def PRINT_CONFIG():
   print "OBJECT_CLASS:\t", OBJECT_CLASS
   print "DATA_BASE_DIR:\t", DATA_BASE_DIR
   print "OUT_BASE_DIR:\t", OUT_BASE_DIR
-  print "OUT_WEIGHTS_DIR:\t", OUT_WEIGHTS_DIR
+  print "OUT_WEIGHTS_DIR:", OUT_WEIGHTS_DIR
   print "OUT_LOG_FP:\t", OUT_LOG_FP
-  print "OUT_PRED_FP:\t", OUT_PRED_FP
   print " "
 
   print "~~PROGRAM PARAMS~~"
   print "GPU:\t\t", GPU
   print "MULTI_GPU:\t", MULTI_GPU
+  print "WEIGHTS_CHECKPOINT:", WEIGHTS_CHECKPOINT
   print "VOXEL_RES:\t", VOXEL_RES
+  print "IOU_THRESH:\t", IOU_THRESH
   print ""
 
   print "~~LEARNING PARAMS~~"

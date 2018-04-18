@@ -19,9 +19,9 @@ from models import AE_3D
 GPU = True
 MULTI_GPU = True
 OBJ_CLASS = "CHAIR"
+NAME = "chair-ae3d"
 DATA_BASE_DIR = "../../data/%s" % OBJ_CLASS
-IN_WEIGHTS_FP = "../../output/%s/models/test-ae3d.pt" % OBJ_CLASS
-NAME = (IN_WEIGHTS_FP.split("/")[-1]).split(".")[0]
+IN_WEIGHTS_FP = "../../output/%s/models/%s/%s.pt" % (OBJ_CLASS, NAME, NAME)
 OUTPUT_DIR = "../../output/%s/preds/%s" % (OBJ_CLASS, NAME)
 OUTPUT_PROB_DIR = "%s/prob" % OUTPUT_DIR
 OUTPUT_BINARY_DIR = "%s/binary" % OUTPUT_DIR
@@ -29,7 +29,7 @@ OUTPUT_BINARY_DIR = "%s/binary" % OUTPUT_DIR
 VOXEL_RES = 20
 EMBED_SIZE = 64
 BATCH_SIZE = 32
-BIN_THRESH = 0.5
+BIN_THRESH = 0.2
 
 #####################
 #   BEGIN HELPERS   #
@@ -138,11 +138,6 @@ def main():
     # Set up model for training
     log_print("Creating model...")
     model = create_model(VOXEL_RES, EMBED_SIZE)
-    try:
-        model.load_state_dict(torch.load(IN_WEIGHTS_FP))
-    except:
-        log_print("ERROR...weights not loaded")
-        pass
     if GPU and torch.cuda.is_available():
         log_print("\tEnabling GPU")
         if MULTI_GPU and torch.cuda.device_count() > 1:
@@ -151,11 +146,11 @@ def main():
         model = model.cuda()
     else:
         log_print("\tIgnoring GPU (CPU only)")
+    model.load_state_dict(torch.load(IN_WEIGHTS_FP))
 
     # Perform testing and save mats
     log_print("Generating predictions...")
     predictions = test_model(model, test_dataloader, loss_f)
-
     log_print("Writing predictions to file...")
     write_mats(predictions)
 

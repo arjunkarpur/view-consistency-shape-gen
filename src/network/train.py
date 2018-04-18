@@ -39,6 +39,15 @@ def create_model(voxel_res, embedding_size):
     model = AE_3D(voxel_res, embedding_size)
     return model
 
+def calc_iou_acc(gt, pred, bin_thresh):
+    pred[pred < bin_thresh] = 0
+    pred[pred >= bin_thresh] = 1
+    gt = gt.int()
+    pred = pred.int()
+    intersect = (gt * pred).data.nonzero()
+    union = (torch.add(gt,pred)).data.nonzero()
+    return float(len(intersect)) / float(len(union))
+
 def train_model(model, train_dataloader, val_dataloader, loss_f, optimizer, explorer, epochs):
 
     init_time = time.time()
@@ -60,7 +69,9 @@ def train_model(model, train_dataloader, val_dataloader, loss_f, optimizer, expl
 
             # Iterate over dataset
             epoch_loss = 0.0
+            epoch_iou = 0.0
             curr_loss = 0.0
+            curr_iou = 0.0
             print_interval = 20
             epoch_checkpoint = config.WEIGHTS_CHECKPOINT
             batch_count = 0
@@ -81,31 +92,38 @@ def train_model(model, train_dataloader, val_dataloader, loss_f, optimizer, expl
                 # Calculate loss
                 loss = loss_f(out_voxels.float(), voxels.float())
                 curr_loss += config.BATCH_SIZE * loss.data[0]
-                #TODO: Calculate accuracy (IOU accuracy)
 
                 # Backward pass (if train)
                 if phase == "train":
                     loss.backward()
                     optimizer.step()
 
+                # Calculate accuracy (IOU accuracy)
+                iou = calc_iou_acc(voxels, out_voxels, config.IOU_THRESH)
+                curr_iou += config.BATCH_SIZE * iou
+
                 # Output
                 if batch_count % print_interval == 0 and batch_count != 0:
                     epoch_loss += curr_loss
+                    epoch_iou += curr_iou
                     if phase == "train":
                         curr_loss = float(curr_loss) / float(print_interval*config.BATCH_SIZE)
-                        log_print("\tBatches %i-%i -\tAvg Loss: %f" % (batch_count-print_interval+1, batch_count, curr_loss))
+                        curr_iou = float(curr_iou) / float(print_interval*config.BATCH_SIZE)
+                        log_print("\tBatches %i-%i -\tAvg Loss: %f ,  Avg IoU: %f" % (batch_count-print_interval+1, batch_count, curr_loss, curr_iou))
                     curr_loss = 0.0
+                    curr_iou
                 batch_count += 1
       
             # Report epoch results
             num_images = len(dataloader.dataset)
             epoch_loss = float(epoch_loss+curr_loss) / float(num_images)
-            log_print("\tEPOCH %i [%s] - Avg Loss: %f" % (epoch+1, phase, epoch_loss))
+            epoch_iou = float(epoch_iou+curr_iou) / float(num_images)
+            log_print("\tEPOCH %i [%s] - Avg Loss: %f , Avg IoU: %f" % (epoch+1, phase, epoch_loss, epoch_iou))
 
             # Save best model weights from epoch
             err_improvement = best_loss - epoch_loss 
             if phase == "val" and (err_improvement >= 0 or epoch == 0):
-                log_print("\tBEST NEW EPOCH: Saving %i" % epoch)
+                log_print("\tBEST NEW EPOCH: %i" % (epoch+1))
                 best_loss = epoch_loss
                 best_weights = model.state_dict().copy()
                 best_epoch = epoch
@@ -113,8 +131,7 @@ def train_model(model, train_dataloader, val_dataloader, loss_f, optimizer, expl
             # Checkpoint epoch weights
             if (epoch % epoch_checkpoint == 0) and (epoch != 0):
                 log_print("\tCheckpointing weights for epoch %i" % epoch)
-                fp = os.path.join(config.OUT_WEIGHTS_DIR, "%s_%i.pt" % (config.RUN_NAME, epoch))
-                save_model_weights(model, fp)
+                save_model_weights(model, "%s_%i" % (config.RUN_NAME, epoch))
 
     # Finish up
     time_elapsed = time.time() - init_time
@@ -123,8 +140,12 @@ def train_model(model, train_dataloader, val_dataloader, loss_f, optimizer, expl
     model.load_state_dict(best_weights)
     return model
 
-def save_model_weights(model, filepath):
-    torch.save(model.state_dict().copy(), filepath)
+def save_model_weights(model, name):
+    dir_ = config.OUT_WEIGHTS_DIR
+    if not os.path.exists(dir_):
+        os.makedirs(dir_)
+    fp = os.path.join(dir_, "%s.pt" % name)
+    torch.save(model.state_dict().copy(), fp)
 
 #####################
 #    END HELPERS    #
@@ -133,8 +154,8 @@ def save_model_weights(model, filepath):
 def main():
 
     # Redirect output to log file
-    sys.stdout = open(config.OUT_LOG_FP, 'w')
-    sys.stderr = sys.stdout
+    #sys.stdout = open(config.OUT_LOG_FP, 'w')
+    #sys.stderr = sys.stdout
     log_print("Beginning script...")
 
     # Print beginning debug info
@@ -187,7 +208,7 @@ def main():
     # Save model weights
     out_fp = os.path.join(config.OUT_WEIGHTS_DIR, "%s.pt" % config.RUN_NAME)
     log_print("Saving model weights to %s..." % out_fp)
-    save_model_weights(model, out_fp)
+    save_model_weights(model, config.RUN_NAME)
 
     log_print("Script DONE!")
 
