@@ -154,8 +154,8 @@ def save_model_weights(model, name):
 def main():
 
     # Redirect output to log file
-    #sys.stdout = open(config.OUT_LOG_FP, 'w')
-    #sys.stderr = sys.stdout
+    sys.stdout = open(config.OUT_LOG_FP, 'w')
+    sys.stderr = sys.stdout
     log_print("Beginning script...")
 
     # Print beginning debug info
@@ -195,10 +195,16 @@ def main():
         model.parameters(), 
         lr=config.LEARNING_RATE,
         momentum=config.MOMENTUM)
-    explorer = lr_scheduler.StepLR(
-        optimizer, 
-        step_size=config.STEP_SIZE,
-        gamma=config.GAMMA)
+    if config.LR_STEPS is None:
+        explorer = lr_scheduler.StepLR(
+            optimizer, 
+            step_size=config.STEP_SIZE,
+            gamma=config.GAMMA)
+    else:
+        explorer = lr_scheduler.MultiStepLR(
+            optimizer,
+            config.LR_STEPS,
+            gamma=config.GAMMA)
 
     # Perform training
     log_print("~~~~~Starting training~~~~~")

@@ -1,5 +1,5 @@
 # Filepaths
-RUN_NAME = "chair-ae3d-long"
+RUN_NAME = "chair-ae3d-long2"
 RUN_DESCRIPTION = "training 3d auto-encoder on chair voxels. long version (200 epochs w/ low learning rate)."
 PROJ_BASE_DIR = "../.."
 OBJECT_CLASS = "CHAIR"
@@ -17,10 +17,11 @@ IOU_THRESH = 0.5
 
 # Learning parameters
 BATCH_SIZE = 32
-EPOCHS = 200
-LEARNING_RATE = 1e-6
+EPOCHS = 250
+LEARNING_RATE = 1e-2
+LR_STEPS = [10, 20, 40, 120]
 MOMENTUM = 0.9
-STEP_SIZE = 201
+STEP_SIZE = 20
 GAMMA = 0.1
 EMBED_SIZE = 64
 
