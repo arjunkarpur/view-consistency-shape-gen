@@ -19,7 +19,7 @@ from models import AE_3D
 GPU = True
 MULTI_GPU = True
 OBJ_CLASS = "CHAIR"
-NAME = "chair-ae3d"
+NAME = "chair-ae3d-long"
 DATA_BASE_DIR = "../../data/%s" % OBJ_CLASS
 IN_WEIGHTS_FP = "../../output/%s/models/%s/%s.pt" % (OBJ_CLASS, NAME, NAME)
 OUTPUT_DIR = "../../output/%s/preds/%s" % (OBJ_CLASS, NAME)
@@ -29,7 +29,7 @@ OUTPUT_BINARY_DIR = "%s/binary" % OUTPUT_DIR
 VOXEL_RES = 20
 EMBED_SIZE = 64
 BATCH_SIZE = 32
-BIN_THRESH = 0.2
+BIN_THRESH = 0.5
 
 #####################
 #   BEGIN HELPERS   #
@@ -53,6 +53,15 @@ def create_shapenet_voxel_dataloader(dset_type_, data_base_dir_, batch_size_):
 def create_model(voxel_res, embedding_size):
     model = AE_3D(voxel_res, embedding_size)
     return model
+
+def calc_iou_acc(gt, pred, bin_thresh):
+    pred[pred < bin_thresh] = 0
+    pred[pred >= bin_thresh] = 1
+    gt = gt.int()
+    pred = pred.int()
+    intersect = (gt * pred).data.nonzero()
+    union = (torch.add(gt,pred)).data.nonzero()
+    return float(len(intersect)) / float(len(union))
 
 def write_mats(predictions):
 
@@ -79,8 +88,10 @@ def test_model(model, test_dataloader, loss_f):
 
     # Iterate through dataset
     curr_loss = 0.0
+    curr_iou = 0.0
     preds = {}
     log_print("\t%i instances" % len(test_dataloader.dataset))
+    model.eval()
     for data in test_dataloader:
 
         # Wrap as pytorch autograd Variable
@@ -95,7 +106,10 @@ def test_model(model, test_dataloader, loss_f):
         # Calculate loss
         loss = loss_f(out_voxels.float(), voxels.float())
         curr_loss += BATCH_SIZE * loss.data[0]
-        #TODO: Calculate accuracy (IOU accuracy)
+
+        # Calculate accuracy (IOU accuracy)
+        iou = calc_iou_acc(voxels, out_voxels, BIN_THRES)
+        curr_iou += config.BATCH_SIZE * iou
 
         # Save out voxels
         out_voxels = out_voxels.cpu()
@@ -107,7 +121,9 @@ def test_model(model, test_dataloader, loss_f):
     # Report results
     num_images = len(test_dataloader.dataset)
     total_loss = float(curr_loss) / float(num_images)
-    log_print("\tAverage Loss: %f" % (total_loss))
+    total_iou = float(curr_iou) / float(num_images)
+    log_print("\tAverage Loss: %f" % total_loss)
+    log_print("\tAverage IoU Acc: %f" % total_iou)
 
     # Finish up
     return preds 
