@@ -56,7 +56,11 @@ def train_model(model, train_dataloader, val_dataloader, loss_f, optimizer, expl
     best_epoch = -1
 
     for epoch in xrange(epochs):
-        log_print("Epoch %i/%i: %i batches of %i images each" % (epoch+1, epochs, len(train_dataloader.dataset)/config.BATCH_SIZE, config.BATCH_SIZE))
+        lr = []
+        for param_group in optimizer.param_groups:
+            lr += [str(param_group['lr'])]
+
+        log_print("Epoch %i/%i: %i batches of %i images each. LR: [%s]" % (epoch+1, epochs, len(train_dataloader.dataset)/config.BATCH_SIZE, config.BATCH_SIZE, ','.join(lr)))
 
         for phase in ["train", "val"]:
             if phase == "train":
@@ -129,7 +133,7 @@ def train_model(model, train_dataloader, val_dataloader, loss_f, optimizer, expl
                 best_epoch = epoch
 
             # Checkpoint epoch weights
-            if (epoch % epoch_checkpoint == 0) and (epoch != 0):
+            if (phase == "val") and (epoch % epoch_checkpoint == 0) and (epoch != 0):
                 log_print("\tCheckpointing weights for epoch %i" % epoch)
                 save_model_weights(model, "%s_%i" % (config.RUN_NAME, epoch))
 
@@ -186,6 +190,8 @@ def main():
         model = model.cuda()
     else:
         log_print("\tIgnoring GPU (CPU only)")
+    if config.LOAD_WEIGHTS is not None:
+        model.load_state_dict(torch.load(config.LOAD_WEIGHTS))
 
     # Set up loss and optimizer
     loss_f = nn.BCELoss()
