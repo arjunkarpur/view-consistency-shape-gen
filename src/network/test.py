@@ -1,3 +1,4 @@
+import numpy as np
 import os
 import sys
 import math
@@ -19,7 +20,7 @@ from models import AE_3D
 GPU = True
 MULTI_GPU = True
 OBJ_CLASS = "CHAIR"
-NAME = "chair-ae3d-long2"
+NAME = "chair-ae3d-long4"
 DATA_BASE_DIR = "../../data/%s" % OBJ_CLASS
 IN_WEIGHTS_FP = "../../output/%s/models/%s/%s.pt" % (OBJ_CLASS, NAME, NAME)
 OUTPUT_DIR = "../../output/%s/preds/%s" % (OBJ_CLASS, NAME)
@@ -87,7 +88,7 @@ def write_mats(predictions):
 
             # Write mat
             binary_fp = str(os.path.join(binary_dir, "%s.mat" % id_))
-            binary_pred = predictions[id_]
+            binary_pred = np.copy(predictions[id_])
             binary_pred[binary_pred < BIN_THRESH] = 0
             binary_pred[binary_pred >= BIN_THRESH] = 1
             scio.savemat(binary_fp, {"id":id_, "data":binary_pred})
