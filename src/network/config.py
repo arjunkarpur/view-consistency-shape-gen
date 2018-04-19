@@ -1,6 +1,6 @@
 # Filepaths
-RUN_NAME = "chair-ae3d-long3"
-RUN_DESCRIPTION = "training 3d auto-encoder on chair voxels. fine tune using weights from long2."
+RUN_NAME = "chair-ae3d-long4"
+RUN_DESCRIPTION = "training 3d auto-encoder on chair voxels. using batch normalization and xavier init"
 PROJ_BASE_DIR = "../.."
 OBJECT_CLASS = "CHAIR"
 DATA_BASE_DIR = "%s/data/%s" % (PROJ_BASE_DIR, OBJECT_CLASS)
@@ -16,11 +16,11 @@ VOXEL_RES = 20
 IOU_THRESH = 0.5
 
 # Learning parameters
-LOAD_WEIGHTS = "%s/output/CHAIR/models/chair-ae3d-long2/chair-ae3d-long2.pt" % PROJ_BASE_DIR
+LOAD_WEIGHTS = None
 BATCH_SIZE = 32
 EPOCHS = 100
-LEARNING_RATE = 1e-7
-LR_STEPS = [2]
+LEARNING_RATE = 1e-2
+LR_STEPS = [5, 10, 20, 30, 50]
 MOMENTUM = 0.9
 STEP_SIZE = 20
 GAMMA = 0.1
@@ -55,6 +55,7 @@ def PRINT_CONFIG():
   print "BATCH_SIZE:\t", BATCH_SIZE
   print "EPOCHS:\t\t", EPOCHS
   print "LEARNING_RATE:\t", LEARNING_RATE
+  print "LR_STEPS:\t", LR_STEPS
   print "MOMENTUM:\t", MOMENTUM
   print "STEP_SIZE:\t", STEP_SIZE
   print "GAMMA:\t\t", GAMMA

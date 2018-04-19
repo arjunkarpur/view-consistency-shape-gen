@@ -15,23 +15,36 @@ class AE_3D(nn.Module):
 
         # Setup encoder
         self.conv1_3d = nn.Conv3d(1, 96, 7)
+        #nn.init.xavier_uniform(self.conv1_3d.weight)
+        self.bn1_3d = nn.BatchNorm3d(96)
         self.conv2_3d = nn.Conv3d(96, 256, 5)
+        #nn.init.xavier_uniform(self.conv2_3d.weight)
+        self.bn2_3d = nn.BatchNorm3d(256)
         self.conv3_3d = nn.Conv3d(256, 384, 3)
+        #nn.init.xavier_uniform(self.conv3_3d.weight)
+        self.bn3_3d = nn.BatchNorm3d(384)
         self.conv4_3d = nn.Conv3d(384, 256, 3)
+        #nn.init.xavier_uniform(self.conv4_3d.weight)
+        self.bn4_3d = nn.BatchNorm3d(256)
         self.fc5_embed = nn.Linear(256*6*6*6, embed_space)
 
         # Setup decoder
         self.fc6_reconstruct = nn.Linear(embed_space, 216)
         self.deconv4_3d = nn.ConvTranspose3d(1, 256, 3)
+        #nn.init.xavier_uniform(self.deconv4_3d.weight)
         self.deconv3_3d = nn.ConvTranspose3d(256, 384, 3)
+        #nn.init.xavier_uniform(self.deconv3_3d.weight)
         self.deconv2_3d = nn.ConvTranspose3d(384, 256, 5)
+        #nn.init.xavier_uniform(self.deconv2_3d.weight)
         self.deconv1_3d = nn.ConvTranspose3d(256, 96, 7)
+        #nn.init.xavier_uniform(self.deconv1_3d.weight)
         self.deconv0_3d = nn.ConvTranspose3d(96, 1, 1)
+        #nn.init.xavier_uniform(self.deconv0_3d.weight)
         return;
 
     def forward(self, x):
         x = x.view(x.size(0), 1, self.res, self.res, self.res)
-        x = self._encode(x)
+        x = self._encode_norm(x)
         x = self._decode(x)
         return x
 
@@ -40,6 +53,15 @@ class AE_3D(nn.Module):
         x = F.leaky_relu(self.conv2_3d(x))
         x = F.leaky_relu(self.conv3_3d(x))
         x = F.leaky_relu(self.conv4_3d(x))
+        x = x.view(x.size(0), -1)
+        x = self.fc5_embed(x)
+        return x
+
+    def _encode_norm(self, x):
+        x = self.bn1_3d(F.leaky_relu(self.conv1_3d(x)))
+        x = self.bn2_3d(F.leaky_relu(self.conv2_3d(x)))
+        x = self.bn3_3d(F.leaky_relu(self.conv3_3d(x)))
+        x = self.bn4_3d(F.leaky_relu(self.conv4_3d(x)))
         x = x.view(x.size(0), -1)
         x = self.fc5_embed(x)
         return x

@@ -19,7 +19,7 @@ from models import AE_3D
 GPU = True
 MULTI_GPU = True
 OBJ_CLASS = "CHAIR"
-NAME = "chair-ae3d-long"
+NAME = "chair-ae3d-long4"
 DATA_BASE_DIR = "../../data/%s" % OBJ_CLASS
 IN_WEIGHTS_FP = "../../output/%s/models/%s/%s.pt" % (OBJ_CLASS, NAME, NAME)
 OUTPUT_DIR = "../../output/%s/preds/%s" % (OBJ_CLASS, NAME)
@@ -108,8 +108,8 @@ def test_model(model, test_dataloader, loss_f):
         curr_loss += BATCH_SIZE * loss.data[0]
 
         # Calculate accuracy (IOU accuracy)
-        iou = calc_iou_acc(voxels, out_voxels, BIN_THRES)
-        curr_iou += config.BATCH_SIZE * iou
+        iou = calc_iou_acc(voxels, out_voxels, BIN_THRESH)
+        curr_iou += BATCH_SIZE * iou
 
         # Save out voxels
         out_voxels = out_voxels.cpu()
