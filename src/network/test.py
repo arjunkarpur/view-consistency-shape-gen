@@ -61,9 +61,12 @@ def calc_iou_acc(gt, pred, bin_thresh):
     pred[pred >= bin_thresh] = 1
     gt = gt.int()
     pred = pred.int()
-    intersect = (gt * pred).data.nonzero()
-    union = (torch.add(gt,pred)).data.nonzero()
-    return float(len(intersect)) / float(len(union))
+    total = 0.0
+    for i in xrange(gt.size(0))):
+        intersect = (gt[i] * pred[i]).data.nonzero()
+        union = (torch.add(gt[i],pred[i])).data.nonzero()
+        total += float(len(intersect)) / float(len(union))
+    return (float(total) / float(gt.size(0)))
 
 def write_mats(predictions):
 
