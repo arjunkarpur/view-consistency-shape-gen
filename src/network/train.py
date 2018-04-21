@@ -44,9 +44,12 @@ def calc_iou_acc(gt, pred, bin_thresh):
     pred[pred >= bin_thresh] = 1
     gt = gt.int()
     pred = pred.int()
-    intersect = (gt * pred).data.nonzero()
-    union = (torch.add(gt,pred)).data.nonzero()
-    return float(len(intersect)) / float(len(union))
+    total = 0.0
+    for i in xrange(gt.size(0)):
+        intersect = (gt[i] * pred[i]).data.nonzero()
+        union = (torch.add(gt[i],pred[i])).data.nonzero()
+        total += (float(len(intersect)) / float(len(union)))
+    return (float(total) / float(gt.size(0)))
 
 def train_model(model, train_dataloader, val_dataloader, loss_f, optimizer, explorer, epochs):
 
@@ -64,7 +67,8 @@ def train_model(model, train_dataloader, val_dataloader, loss_f, optimizer, expl
 
         for phase in ["train", "val"]:
             if phase == "train":
-                explorer.step()
+                if explorer is not None:
+                    explorer.step()
                 model.eval()
                 dataloader = train_dataloader
             else:
@@ -126,15 +130,18 @@ def train_model(model, train_dataloader, val_dataloader, loss_f, optimizer, expl
 
             # Save best model weights from epoch
             err_improvement = best_loss - epoch_loss 
-            if phase == "val" and (err_improvement >= 0 or epoch == 0):
-                log_print("\tBEST NEW EPOCH: %i" % (epoch+1))
-                best_loss = epoch_loss
-                best_weights = model.state_dict().copy()
-                best_epoch = epoch
+            if phase == "val":
+                if err_improvement >= 0 or epoch == 0:
+                    log_print("\tBEST NEW EPOCH: %i" % (epoch+1))
+                    best_loss = epoch_loss
+                    best_weights = model.state_dict().copy()
+                    best_epoch = epoch
+                else:
+                    log_print("\tCurrent best epoch: %i, %f loss" % (best_epoch, best_loss))
 
             # Checkpoint epoch weights
             if (phase == "val") and (epoch % epoch_checkpoint == 0) and (epoch != 0):
-                log_print("\tCheckpointing weights for epoch %i" % epoch)
+                log_print("\tCheckpointing weights for epoch %i" % (epoch + 1))
                 save_model_weights(model, "%s_%i" % (config.RUN_NAME, epoch))
 
     # Finish up
@@ -182,6 +189,12 @@ def main():
     # Set up model for training
     log_print("Creating model...")
     model = create_model(config.VOXEL_RES, config.EMBED_SIZE)
+    if config.LOAD_WEIGHTS is not None:
+        try:
+            # Try if trained on one GPU
+            model.load_state_dict(torch.load(config.LOAD_WEIGHTS))
+        except:
+            pass
     if config.GPU and torch.cuda.is_available():
         log_print("\tEnabling GPU")
         if config.MULTI_GPU and torch.cuda.device_count() > 1:
@@ -191,26 +204,38 @@ def main():
     else:
         log_print("\tIgnoring GPU (CPU only)")
     if config.LOAD_WEIGHTS is not None:
-        model.load_state_dict(torch.load(config.LOAD_WEIGHTS))
+        try:
+            # Try if trained on multiple GPU (nn.DataParallel)
+            model.load_state_dict(torch.load(config.LOAD_WEIGHTS))
+        except:
+            log_print("FAILED TO LOAD PRE-TRAINED WEIGHTS. EXITING")
+            sys.exit(-1)
 
     # Set up loss and optimizer
     loss_f = nn.BCELoss()
     if config.GPU and torch.cuda.is_available():
         loss_f = loss_f.cuda()
+    """
     optimizer = optim.SGD(
         model.parameters(), 
         lr=config.LEARNING_RATE,
         momentum=config.MOMENTUM)
-    if config.LR_STEPS is None:
+    """
+    optimizer = optim.Adadelta(
+        model.parameters(),
+        lr=config.LEARNING_RATE)
+    if config.STEP_SIZE is not None:
         explorer = lr_scheduler.StepLR(
             optimizer, 
             step_size=config.STEP_SIZE,
             gamma=config.GAMMA)
-    else:
+    elif config.LR_STEPS is not None:
         explorer = lr_scheduler.MultiStepLR(
             optimizer,
             config.LR_STEPS,
             gamma=config.GAMMA)
+    else:
+        explorer = None
 
     # Perform training
     log_print("~~~~~Starting training~~~~~")
