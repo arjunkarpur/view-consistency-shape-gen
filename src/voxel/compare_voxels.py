@@ -6,7 +6,7 @@ import scipy.io as sio
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 
-pred_dir = "../../output/CHAIR/preds/chair-ae3d-long/binary"
+pred_dir = "../../output/CHAIR/preds/chair-ae3d-long6/binary/0_4"
 gt_dir = "../../data/CHAIR/mat/"
 
 for root, dirs, files in os.walk(pred_dir):

@@ -20,7 +20,7 @@ from models import AE_3D
 GPU = True
 MULTI_GPU = True
 OBJ_CLASS = "CHAIR"
-NAME = "chair-ae3d-long4"
+NAME = "chair-ae3d-long6"
 DATA_BASE_DIR = "../../data/%s" % OBJ_CLASS
 IN_WEIGHTS_FP = "../../output/%s/models/%s/%s.pt" % (OBJ_CLASS, NAME, NAME)
 OUTPUT_DIR = "../../output/%s/preds/%s" % (OBJ_CLASS, NAME)
@@ -62,7 +62,7 @@ def calc_iou_acc(gt, pred, bin_thresh):
     gt = gt.int()
     pred = pred.int()
     total = 0.0
-    for i in xrange(gt.size(0))):
+    for i in xrange(gt.size(0)):
         intersect = (gt[i] * pred[i]).data.nonzero()
         union = (torch.add(gt[i],pred[i])).data.nonzero()
         total += float(len(intersect)) / float(len(union))
