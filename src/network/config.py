@@ -1,6 +1,6 @@
 # Filepaths
-RUN_NAME = "chair-ae3d-long4"
-RUN_DESCRIPTION = "training 3d auto-encoder on chair voxels. using batch normalization and xavier init"
+RUN_NAME = "imagenetwork-test"
+RUN_DESCRIPTION = "test imagenetwork"
 PROJ_BASE_DIR = "../.."
 OBJECT_CLASS = "CHAIR"
 DATA_BASE_DIR = "%s/data/%s" % (PROJ_BASE_DIR, OBJECT_CLASS)
@@ -18,11 +18,11 @@ IOU_THRESH = 0.5
 # Learning parameters
 LOAD_WEIGHTS = None
 BATCH_SIZE = 32
-EPOCHS = 100
-LEARNING_RATE = 1e-2
-LR_STEPS = [5, 10, 20, 30, 50]
+EPOCHS = 200
+LEARNING_RATE = 1.0
+LR_STEPS = None
+STEP_SIZE = None
 MOMENTUM = 0.9
-STEP_SIZE = 20
 GAMMA = 0.1
 EMBED_SIZE = 64
 
