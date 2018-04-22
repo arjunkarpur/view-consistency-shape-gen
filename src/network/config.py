@@ -1,3 +1,4 @@
+
 # Filepaths
 RUN_NAME = "imagenetwork-test"
 RUN_DESCRIPTION = "test imagenetwork"
@@ -7,6 +8,9 @@ DATA_BASE_DIR = "%s/data/%s" % (PROJ_BASE_DIR, OBJECT_CLASS)
 OUT_BASE_DIR = "%s/output/%s" % (PROJ_BASE_DIR, OBJECT_CLASS)
 OUT_WEIGHTS_DIR = "%s/models/%s" % (OUT_BASE_DIR, RUN_NAME)
 OUT_LOG_FP = "%s/logs/%s.log" % (OUT_BASE_DIR, RUN_NAME)
+
+#####################################################################
+#   3D AUTOENCODER PARAMS
 
 # Program parameters
 GPU = True
@@ -26,6 +30,14 @@ MOMENTUM = 0.9
 GAMMA = 0.1
 EMBED_SIZE = 64
 
+#####################################################################
+#   IMAGE NETWORK PARAMS
+IM_LEARNING_RATE = 1e-8
+IM_MOMENTUM=0.9
+IM_RUN_NAME = "im-network-1"
+AE3D_LOAD_WEIGHTS = "%s/models/chair-ae3d-long6/chair-ae3d-long6.pt" % OUT_BASE_DIR
+
+#####################################################################
 # Debugging print method
 def PRINT_CONFIG():
   print "~~~~~ BEGIN CONFIG ~~~~~"

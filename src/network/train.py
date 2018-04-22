@@ -7,10 +7,10 @@ import time
 import torch
 import torch.nn as nn
 import torch.optim as optim
+import torchvision as tv
 from torch.autograd import Variable
 from torch.optim import lr_scheduler
 from torch.utils.data import DataLoader
-from torchvision import transforms
 
 # Imports from src files
 from datasets import ShapeNetVoxelDataset
@@ -27,7 +27,7 @@ def create_shapenet_voxel_dataloader(dset_type_, data_base_dir_, batch_size_):
     dataset = ShapeNetVoxelDataset(
         dset_type=dset_type_,
         data_base_dir=data_base_dir_,
-        transform=transforms.Compose([transforms.ToTensor()]))
+        transform=tv.transforms.Compose([tv.transforms.ToTensor()]))
     dataloader = DataLoader(
         dataset,
         batch_size=batch_size_,
@@ -35,8 +35,43 @@ def create_shapenet_voxel_dataloader(dset_type_, data_base_dir_, batch_size_):
         num_workers=4)
     return dataloader
 
-def create_model(voxel_res, embedding_size):
+def create_image_network_dataloader(dset_type_, data_base_dir_, batch_size_):
+    #TODO
+    """
+    dataset = ShapeNetVoxelDataset(
+        dset_type=dset_type_,
+        data_base_dir=data_base_dir_,
+        transform=transforms.Compose([transforms.ToTensor()]))
+    dataloader = DataLoader(
+        dataset,
+        batch_size=batch_size_,
+        shuffle=True,
+        num_workers=4)
+    return dataloader
+    """
+    return
+
+def create_model_3d_autoencoder(voxel_res, embedding_size):
     model = AE_3D(voxel_res, embedding_size)
+    return model
+
+def create_model_image_network(embedding_size):
+
+    # Create resnet50 layer
+    model = tv.models.resnet50(pretrained=True)
+    model.fc = nn.Linear(model.fc.in_features, embedding_size)
+    nn.init.normal(model.fc.weight, mean=0, std=0.01)
+
+    # Fix layers up to and including layer 2
+    child_counter = 0
+    for child in model.children():
+        if child_counter < 6:
+            for param in child.parameters():
+                param.requires_grad = False
+        else:
+            break
+        child_counter += 1
+
     return model
 
 def calc_iou_acc(gt, pred, bin_thresh):
@@ -151,6 +186,11 @@ def train_model(model, train_dataloader, val_dataloader, loss_f, optimizer, expl
     model.load_state_dict(best_weights)
     return model
 
+
+def train_model_im_network(model_ae, model_im, train_dataloader, val_dataloader, loss_f, optimizer, explorer, epochs):
+    #TODO
+    return model_im
+
 def save_model_weights(model, name):
     dir_ = config.OUT_WEIGHTS_DIR
     if not os.path.exists(dir_):
@@ -158,21 +198,14 @@ def save_model_weights(model, name):
     fp = os.path.join(dir_, "%s.pt" % name)
     torch.save(model.state_dict().copy(), fp)
 
-#####################
-#    END HELPERS    #
-#####################
+def try_load_weights(model, fp):
+    try:
+        model.load_state_dict(torch.load(fp))
+        return True
+    except:
+        return False
 
-def main():
-
-    # Redirect output to log file
-    sys.stdout = open(config.OUT_LOG_FP, 'w')
-    sys.stderr = sys.stdout
-    log_print("Beginning script...")
-
-    # Print beginning debug info
-    log_print("Printing config file...")
-    config.PRINT_CONFIG()
-
+def train_autoencoder():
     # Create training DataLoader
     log_print("Loading training data...")
     train_dataloader =  \
@@ -189,12 +222,9 @@ def main():
     # Set up model for training
     log_print("Creating model...")
     model = create_model(config.VOXEL_RES, config.EMBED_SIZE)
+    load_success = False
     if config.LOAD_WEIGHTS is not None:
-        try:
-            # Try if trained on one GPU
-            model.load_state_dict(torch.load(config.LOAD_WEIGHTS))
-        except:
-            pass
+        load_success = try_load_weights(model, config.LOAD_WEIGHTS)
     if config.GPU and torch.cuda.is_available():
         log_print("\tEnabling GPU")
         if config.MULTI_GPU and torch.cuda.device_count() > 1:
@@ -203,11 +233,8 @@ def main():
         model = model.cuda()
     else:
         log_print("\tIgnoring GPU (CPU only)")
-    if config.LOAD_WEIGHTS is not None:
-        try:
-            # Try if trained on multiple GPU (nn.DataParallel)
-            model.load_state_dict(torch.load(config.LOAD_WEIGHTS))
-        except:
+    if (config.LOAD_WEIGHTS is not None) and (load_success is False):
+        if not try_load_weights(model, config.LOAD_WEIGHTS):
             log_print("FAILED TO LOAD PRE-TRAINED WEIGHTS. EXITING")
             sys.exit(-1)
 
@@ -246,7 +273,89 @@ def main():
     out_fp = os.path.join(config.OUT_WEIGHTS_DIR, "%s.pt" % config.RUN_NAME)
     log_print("Saving model weights to %s..." % out_fp)
     save_model_weights(model, config.RUN_NAME)
+    return
 
+def train_image_network():
+    log_print("Loading training data...")
+    train_dataloader = \
+        create_image_network_dataloader(
+            "train",
+            config.DATA_BASE_DIR,
+            config.BATCH_SIZE)
+    val_dataloader = \
+        create_image_network_dataloader(
+            "val",
+            config.DATA_BASE_DIR,
+            config.BATCH_SIZE)
+
+    log_print("Creating image network and 3d-autoencoder models...")
+    model_ae = create_model_3d_autoencoder(config.VOXEL_RES, config.EMBED_SIZE)
+    model_im = create_model_image_network(config.EMBED_SIZE)
+    try_load_weights(model_ae, config.AE3D_LOAD_WEIGHTS)
+    if config.GPU and torch.cuda.is_available():
+        log_print("\tEnabling GPU")
+        if config.MULTI_GPU and torch.cuda.device_count() > 1:
+            log_print("\tUsing multiple GPUs: %i" % torch.cuda.device_count())
+            model_ae = nn.DataParallel(model_ae)
+            model_im = nn.DataParallel(model_im)
+        model_ae = model_ae.cuda()
+        model_im = model_im.cuda()
+    else:
+        log_print("\t Ignoring GPU (CPU only)")
+
+
+    # Set up loss and optimizer
+    loss_f = nn.MSELoss()
+    if config.GPU and torch.cuda.is_available():
+        loss_f = loss_f.cuda()
+    optimizer = optim.SGD(
+        filter(lambda p: p.requires_grad, model_im.parameters()),
+        lr=config.IM_LEARNING_RATE,
+        momentum=config.IM_MOMENTUM)
+    explorer = None
+
+    # Perform training
+    log_print("~~~~~Start training~~~~~")
+    model_im = train_model_im_network(model_ae, model_im, train_dataloader, val_dataloader, loss_f, optimizer, explorer, config.EPOCHS)
+    log_print("~~~~~Training finished~~~~~")
+
+    # Save model weights
+    log_print("Saving model weights")
+    save_model_weights(model_im, config.IM_RUN_NAME)
+    return
+
+def train_joint():
+    return
+
+#####################
+#    END HELPERS    #
+#####################
+
+def main():
+
+    # Redirect output to log file
+    #sys.stdout = open(config.OUT_LOG_FP, 'w')
+    #sys.stderr = sys.stdout
+    log_print("Beginning script...")
+
+    # Print beginning debug info
+    log_print("Printing config file...")
+    config.PRINT_CONFIG()
+
+    # Run 3 step training process
+    log_print("BEGINNING PART 1: train 3D autoencoder")
+    #train_autoencoder()
+    log_print("FINISHING PART 1") 
+
+    log_print("BEGINNING PART 2: train image network")
+    train_image_network()
+    log_print("FINISHING PART 1") 
+
+    log_print("BEGINNING PART 3: joint training")
+    train_joint()
+    log_print("FINISHING PART 3") 
+
+    # Finished
     log_print("Script DONE!")
 
 if __name__ == "__main__":
