@@ -73,7 +73,7 @@ class RenderingVoxelDataset:
         #   4) normalize to imagenet mean
         self.transform_im = transforms.Compose([
             transforms.ToPILImage(),
-            transforms.Resize(247),
+            transforms.Resize(347),
             transforms.CenterCrop(224),
             transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),

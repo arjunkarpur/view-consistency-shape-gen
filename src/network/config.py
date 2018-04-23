@@ -1,7 +1,7 @@
 
 # Filepaths
-RUN_NAME = "imagenetwork-test"
-RUN_DESCRIPTION = "test imagenetwork"
+RUN_NAME = "im-network-1"
+RUN_DESCRIPTION = "imagenetwork"
 PROJ_BASE_DIR = "../.."
 OBJECT_CLASS = "CHAIR"
 DATA_BASE_DIR = "%s/data/%s" % (PROJ_BASE_DIR, OBJECT_CLASS)
@@ -15,7 +15,7 @@ OUT_LOG_FP = "%s/logs/%s.log" % (OUT_BASE_DIR, RUN_NAME)
 # Program parameters
 GPU = True
 MULTI_GPU = True
-WEIGHTS_CHECKPOINT = 1
+WEIGHTS_CHECKPOINT = 5
 VOXEL_RES = 20
 IOU_THRESH = 0.5
 
@@ -32,11 +32,11 @@ EMBED_SIZE = 64
 
 #####################################################################
 #   IMAGE NETWORK PARAMS
-IM_LEARNING_RATE = 1e-3
+IM_LEARNING_RATE = 1e-5
 IM_MOMENTUM=0.9
 IM_RUN_NAME = "im-network-1"
 AE3D_LOAD_WEIGHTS = "%s/models/chair-ae3d-long6/chair-ae3d-long6.pt" % OUT_BASE_DIR
-IM_EPOCHS = 200
+IM_EPOCHS = 60
 
 #####################################################################
 # Debugging print method

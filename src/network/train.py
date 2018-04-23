@@ -32,7 +32,7 @@ def create_shapenet_voxel_dataloader(dset_type_, data_base_dir_, batch_size_):
         dataset,
         batch_size=batch_size_,
         shuffle=True,
-        num_workers=4)
+        num_workers=8)
     return dataloader
 
 def create_image_network_dataloader(dset_type_, data_base_dir_, batch_size_):
@@ -43,7 +43,7 @@ def create_image_network_dataloader(dset_type_, data_base_dir_, batch_size_):
         dataset,
         batch_size=batch_size_,
         shuffle=True,
-        num_workers=4)
+        num_workers=8)
     return dataloader
 
 def create_model_3d_autoencoder(voxel_res, embedding_size):
@@ -79,6 +79,20 @@ def calc_iou_acc(gt, pred, bin_thresh):
         union = (torch.add(gt[i],pred[i])).data.nonzero()
         total += (float(len(intersect)) / float(len(union)))
     return (float(total) / float(gt.size(0)))
+
+def save_model_weights(model, name):
+    dir_ = config.OUT_WEIGHTS_DIR
+    if not os.path.exists(dir_):
+        os.makedirs(dir_)
+    fp = os.path.join(dir_, "%s.pt" % name)
+    torch.save(model.state_dict().copy(), fp)
+
+def try_load_weights(model, fp):
+    try:
+        model.load_state_dict(torch.load(fp))
+        return True
+    except:
+        return False
 
 def train_model(model, train_dataloader, val_dataloader, loss_f, optimizer, explorer, epochs):
 
@@ -227,8 +241,7 @@ def train_model_im_network(model_ae, model_im, train_dataloader, val_dataloader,
                 optimizer.zero_grad()
                 im_embed = model_im(ims)
                 voxel_embed = model_ae.module._encode(voxels)
-                loss = loss_f(im_embed, voxel_embed) #old loss
-                #loss = torch.mean(torch.norm(im_embed-voxel_embed, 2, 1))
+                loss = loss_f(im_embed, voxel_embed)
                 curr_loss += config.BATCH_SIZE * loss.data[0]
 
                 # Backprop and cleanup
@@ -274,19 +287,6 @@ def train_model_im_network(model_ae, model_im, train_dataloader, val_dataloader,
     model_im.load_state_dict(best_weights)
     return model_im
 
-def save_model_weights(model, name):
-    dir_ = config.OUT_WEIGHTS_DIR
-    if not os.path.exists(dir_):
-        os.makedirs(dir_)
-    fp = os.path.join(dir_, "%s.pt" % name)
-    torch.save(model.state_dict().copy(), fp)
-
-def try_load_weights(model, fp):
-    try:
-        model.load_state_dict(torch.load(fp))
-        return True
-    except:
-        return False
 
 def train_autoencoder():
     # Create training DataLoader
@@ -391,7 +391,6 @@ def train_image_network():
         log_print("COULDN'T LOAD AUTOENCODER WEIGHTS")
         sys.exit(-1)
 
-
     # Set up loss and optimizer
     loss_f = nn.MSELoss()
     if config.GPU and torch.cuda.is_available():
@@ -400,11 +399,6 @@ def train_image_network():
         filter(lambda p: p.requires_grad, model_im.parameters()),
         lr=config.IM_LEARNING_RATE,
         momentum=config.IM_MOMENTUM)
-    """
-    optimizer = optim.Adadelta(
-        filter(lambda p: p.requires_grad, model_im.parameters()),
-        lr=config.IM_LEARNING_RATE)
-    """
     explorer = None
 
     # Perform training
@@ -445,7 +439,7 @@ def main():
     log_print("FINISHING PART 1") 
 
     log_print("BEGINNING PART 3: joint training")
-    train_joint()
+    #train_joint()
     log_print("FINISHING PART 3") 
 
     # Finished
