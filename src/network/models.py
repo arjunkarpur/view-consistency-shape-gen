@@ -62,12 +62,12 @@ class AE_3D(nn.Module):
         return;
 
     def forward(self, x):
-        x = x.view(x.size(0), 1, self.res, self.res, self.res)
-        x = self._encode_norm(x)
+        x = self._encode(x)
         x = self._decode(x)
         return x
 
-    def _encode_norm(self, x):
+    def _encode(self, x):
+        x = x.view(x.size(0), 1, self.res, self.res, self.res)
         x = self.bn1_3d(self.prelu_en_1(self.conv1_3d(x)))
         x = self.bn2_3d(self.prelu_en_2(self.conv2_3d(x)))
         x = self.bn3_3d(self.prelu_en_2(self.conv3_3d(x)))

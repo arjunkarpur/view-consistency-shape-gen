@@ -119,7 +119,7 @@ def train_model(model, train_dataloader, val_dataloader, loss_f, optimizer, expl
                         curr_iou = float(curr_iou) / float(print_interval*config.BATCH_SIZE)
                         log_print("\tBatches %i-%i -\tAvg Loss: %f ,  Avg IoU: %f" % (batch_count-print_interval+1, batch_count, curr_loss, curr_iou))
                     curr_loss = 0.0
-                    curr_iou
+                    curr_iou = 0.0
                 batch_count += 1
       
             # Report epoch results

@@ -13,7 +13,7 @@ from torch.optim import lr_scheduler
 from torch.utils.data import DataLoader
 
 # Imports from src files
-from datasets import ShapeNetVoxelDataset
+from datasets import ShapeNetVoxelDataset, RenderingVoxelDataset
 from models import AE_3D
 
 #####################
@@ -36,20 +36,15 @@ def create_shapenet_voxel_dataloader(dset_type_, data_base_dir_, batch_size_):
     return dataloader
 
 def create_image_network_dataloader(dset_type_, data_base_dir_, batch_size_):
-    #TODO
-    """
-    dataset = ShapeNetVoxelDataset(
+    dataset = RenderingVoxelDataset(
         dset_type=dset_type_,
-        data_base_dir=data_base_dir_,
-        transform=transforms.Compose([transforms.ToTensor()]))
+        data_base_dir=data_base_dir_)
     dataloader = DataLoader(
         dataset,
         batch_size=batch_size_,
         shuffle=True,
         num_workers=4)
     return dataloader
-    """
-    return
 
 def create_model_3d_autoencoder(voxel_res, embedding_size):
     model = AE_3D(voxel_res, embedding_size)
@@ -188,7 +183,94 @@ def train_model(model, train_dataloader, val_dataloader, loss_f, optimizer, expl
 
 
 def train_model_im_network(model_ae, model_im, train_dataloader, val_dataloader, loss_f, optimizer, explorer, epochs):
-    #TODO
+
+    # Freeze all 3d autoencoder layers
+    for param in model_ae.parameters():
+        param.requires_grad = False
+        
+    init_time = time.time()
+    best_loss = float('inf')
+    best_weights = model_im.state_dict().copy()
+    best_epoch = -1
+
+    for epoch in xrange(epochs):
+        log_print("Epoch %i/%i: %i batches of %i images each" % (epoch+1, epochs, len(train_dataloader.dataset)/config.BATCH_SIZE, config.BATCH_SIZE))
+
+        for phase in ["train", "val"]:
+            if phase == "train":
+                if explorer is not None:
+                    explorer.step()
+                model_im.train()
+                dataloader = train_dataloader
+            else:
+                model_im.eval()
+                dataloader = val_dataloader
+
+            # Iterate over dataset
+            epoch_loss = 0.0
+            curr_loss = 0.0
+            print_interval = 100
+            epoch_checkpoint = config.WEIGHTS_CHECKPOINT
+            batch_count = 0
+
+            for data in dataloader:
+
+                # Wrap in pytorch autograd Variable
+                ims, voxels = data['im'], data['voxel']
+                if config.GPU and torch.cuda.is_available():
+                    ims = ims.cuda()
+                    voxels = voxels.cuda()
+                ims = Variable(ims).float()
+                voxels = Variable(voxels).float()
+
+                # Forward passes + calc loss
+                im_embed = model_im(ims)
+                _ = model_ae(voxels)
+                voxel_embed = model_ae.module._encode(voxels)
+                loss = loss_f(im_embed.float(), voxel_embed.float())
+                curr_loss += config.BATCH_SIZE * loss.data[0]
+
+                # Backprop and cleanup
+                if phase == "train":
+                    loss.backward()
+                    optimizer.step()
+                del im_embed, voxel_embed
+
+                # Output
+                if batch_count % print_interval == 0 and batch_count != 0:
+                    epoch_loss += curr_loss
+                    if phase == "train":
+                        curr_loss = float(curr_loss) / float(print_interval*config.BATCH_SIZE)
+                        log_print("\tBatches %i-%i -\tAvg Loss: %f" % (batch_count-print_interval+1, batch_count, curr_loss))
+                    curr_loss = 0.0
+                batch_count += 1
+
+            # Report epoch results
+            num_images = len(dataloader.dataset)
+            epoch_loss = float(epoch_loss + curr_loss) / float(num_images)
+            log_print("\tEPOCH %i [%s] - Avg Loss: %f" % (epoch+1, phase, epoch_loss))
+            
+            # Save best model weights from epoch
+            err_improvement = best_loss - epoch_loss 
+            if phase == "val":
+                if err_improvement >= 0 or epoch == 0:
+                    log_print("\tBEST NEW EPOCH: %i" % (epoch+1))
+                    best_loss = epoch_loss
+                    best_weights = model_im.state_dict().copy()
+                    best_epoch = epoch
+                else:
+                    log_print("\tCurrent best epoch: %i, %f loss" % (best_epoch, best_loss))
+
+            # Checkpoint epoch weights
+            if (phase == "val") and (epoch % epoch_checkpoint == 0) and (epoch != 0):
+                log_print("\tCheckpointing weights for epoch %i" % (epoch + 1))
+                save_model_weights(model_im, "%s_%i" % (config.IM_RUN_NAME, epoch))
+
+    # Finish up
+    time_elapsed = time.time() - init_time
+    log_print("BEST EPOCH: %i/%i - Loss: %f" % (best_epoch+1, epochs, best_loss))
+    log_print("Training completed in %sm %ss" % (time_elapsed // 60, time_elapsed % 60))
+    model_im.load_state_dict(best_weights)
     return model_im
 
 def save_model_weights(model, name):
@@ -312,11 +394,16 @@ def train_image_network():
         filter(lambda p: p.requires_grad, model_im.parameters()),
         lr=config.IM_LEARNING_RATE,
         momentum=config.IM_MOMENTUM)
+    """
+    optimizer = optim.Adadelta(
+        filter(lambda p: p.requires_grad, model_im.parameters()),
+        lr=config.IM_LEARNING_RATE)
+    """
     explorer = None
 
     # Perform training
     log_print("~~~~~Start training~~~~~")
-    model_im = train_model_im_network(model_ae, model_im, train_dataloader, val_dataloader, loss_f, optimizer, explorer, config.EPOCHS)
+    model_im = train_model_im_network(model_ae, model_im, train_dataloader, val_dataloader, loss_f, optimizer, explorer, config.IM_EPOCHS)
     log_print("~~~~~Training finished~~~~~")
 
     # Save model weights
@@ -334,8 +421,8 @@ def train_joint():
 def main():
 
     # Redirect output to log file
-    #sys.stdout = open(config.OUT_LOG_FP, 'w')
-    #sys.stderr = sys.stdout
+    sys.stdout = open(config.OUT_LOG_FP, 'w')
+    sys.stderr = sys.stdout
     log_print("Beginning script...")
 
     # Print beginning debug info

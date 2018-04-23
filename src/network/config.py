@@ -15,7 +15,7 @@ OUT_LOG_FP = "%s/logs/%s.log" % (OUT_BASE_DIR, RUN_NAME)
 # Program parameters
 GPU = True
 MULTI_GPU = True
-WEIGHTS_CHECKPOINT = 20
+WEIGHTS_CHECKPOINT = 1
 VOXEL_RES = 20
 IOU_THRESH = 0.5
 
@@ -36,6 +36,7 @@ IM_LEARNING_RATE = 1e-8
 IM_MOMENTUM=0.9
 IM_RUN_NAME = "im-network-1"
 AE3D_LOAD_WEIGHTS = "%s/models/chair-ae3d-long6/chair-ae3d-long6.pt" % OUT_BASE_DIR
+IM_EPOCHS = 15
 
 #####################################################################
 # Debugging print method
@@ -73,5 +74,13 @@ def PRINT_CONFIG():
   print "GAMMA:\t\t", GAMMA
   print "EMBED_SIZE:\t", EMBED_SIZE
   print ""
+
+  print "~"*10
+  print "IMAGE NETWORK PARAMS:"
+  print "IM_LEARNING_RATE:", IM_LEARNING_RATE
+  print "IM_MOMENTUM:", IM_MOMENTUM
+  print "IM_RUN_NAME:", IM_RUN_NAME
+  print "AE3D_LOAD_WEIGHTS:", AE3D_LOAD_WEIGHTS
+  print "IM_EPOCHS:", IM_EPOCHS
 
   print "~~~~~~ END CONFIG ~~~~~~"
