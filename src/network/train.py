@@ -55,7 +55,7 @@ def create_model_image_network(embedding_size):
     # Create resnet50 layer
     model = tv.models.resnet50(pretrained=True)
     model.fc = nn.Linear(model.fc.in_features, embedding_size)
-    nn.init.normal(model.fc.weight, mean=0, std=0.01)
+    nn.init.xavier_uniform(model.fc.weight)
 
     # Fix layers up to and including layer 2
     child_counter = 0
@@ -66,7 +66,6 @@ def create_model_image_network(embedding_size):
         else:
             break
         child_counter += 1
-
     return model
 
 def calc_iou_acc(gt, pred, bin_thresh):
@@ -110,7 +109,7 @@ def train_model(model, train_dataloader, val_dataloader, loss_f, optimizer, expl
             epoch_iou = 0.0
             curr_loss = 0.0
             curr_iou = 0.0
-            print_interval = 20
+            print_interval = 100
             epoch_checkpoint = config.WEIGHTS_CHECKPOINT
             batch_count = 0
 
@@ -192,6 +191,7 @@ def train_model_im_network(model_ae, model_im, train_dataloader, val_dataloader,
     best_loss = float('inf')
     best_weights = model_im.state_dict().copy()
     best_epoch = -1
+    model_ae.eval()
 
     for epoch in xrange(epochs):
         log_print("Epoch %i/%i: %i batches of %i images each" % (epoch+1, epochs, len(train_dataloader.dataset)/config.BATCH_SIZE, config.BATCH_SIZE))
@@ -224,10 +224,11 @@ def train_model_im_network(model_ae, model_im, train_dataloader, val_dataloader,
                 voxels = Variable(voxels).float()
 
                 # Forward passes + calc loss
+                optimizer.zero_grad()
                 im_embed = model_im(ims)
-                _ = model_ae(voxels)
                 voxel_embed = model_ae.module._encode(voxels)
-                loss = loss_f(im_embed.float(), voxel_embed.float())
+                loss = loss_f(im_embed, voxel_embed) #old loss
+                #loss = torch.mean(torch.norm(im_embed-voxel_embed, 2, 1))
                 curr_loss += config.BATCH_SIZE * loss.data[0]
 
                 # Backprop and cleanup
@@ -373,7 +374,7 @@ def train_image_network():
     log_print("Creating image network and 3d-autoencoder models...")
     model_ae = create_model_3d_autoencoder(config.VOXEL_RES, config.EMBED_SIZE)
     model_im = create_model_image_network(config.EMBED_SIZE)
-    try_load_weights(model_ae, config.AE3D_LOAD_WEIGHTS)
+    load_success = try_load_weights(model_ae, config.AE3D_LOAD_WEIGHTS)
     if config.GPU and torch.cuda.is_available():
         log_print("\tEnabling GPU")
         if config.MULTI_GPU and torch.cuda.device_count() > 1:
@@ -384,6 +385,11 @@ def train_image_network():
         model_im = model_im.cuda()
     else:
         log_print("\t Ignoring GPU (CPU only)")
+    if not load_success:
+        load_success = try_load_weights(model_ae, config.AE3D_LOAD_WEIGHTS)
+    if not load_success:
+        log_print("COULDN'T LOAD AUTOENCODER WEIGHTS")
+        sys.exit(-1)
 
 
     # Set up loss and optimizer

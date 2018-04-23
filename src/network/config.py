@@ -32,11 +32,11 @@ EMBED_SIZE = 64
 
 #####################################################################
 #   IMAGE NETWORK PARAMS
-IM_LEARNING_RATE = 1e-8
+IM_LEARNING_RATE = 1e-3
 IM_MOMENTUM=0.9
 IM_RUN_NAME = "im-network-1"
 AE3D_LOAD_WEIGHTS = "%s/models/chair-ae3d-long6/chair-ae3d-long6.pt" % OUT_BASE_DIR
-IM_EPOCHS = 15
+IM_EPOCHS = 200
 
 #####################################################################
 # Debugging print method
