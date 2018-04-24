@@ -32,7 +32,7 @@ def create_shapenet_voxel_dataloader(dset_type_, data_base_dir_, batch_size_):
         dataset,
         batch_size=batch_size_,
         shuffle=True,
-        num_workers=8)
+        num_workers=4)
     return dataloader
 
 def create_image_network_dataloader(dset_type_, data_base_dir_, batch_size_):
@@ -43,7 +43,7 @@ def create_image_network_dataloader(dset_type_, data_base_dir_, batch_size_):
         dataset,
         batch_size=batch_size_,
         shuffle=True,
-        num_workers=8)
+        num_workers=4)
     return dataloader
 
 def create_model_3d_autoencoder(voxel_res, embedding_size):
@@ -94,7 +94,7 @@ def try_load_weights(model, fp):
     except:
         return False
 
-def train_model(model, train_dataloader, val_dataloader, loss_f, optimizer, explorer, epochs):
+def train_model_ae3d(model, train_dataloader, val_dataloader, loss_f, optimizer, explorer, epochs):
 
     init_time = time.time()
     best_loss = float('inf')
@@ -124,7 +124,7 @@ def train_model(model, train_dataloader, val_dataloader, loss_f, optimizer, expl
             curr_loss = 0.0
             curr_iou = 0.0
             print_interval = 100
-            epoch_checkpoint = config.WEIGHTS_CHECKPOINT
+            epoch_checkpoint = config.AE_WEIGHTS_CHECKPOINT
             batch_count = 0
 
             # Iterate through dataset
@@ -185,7 +185,7 @@ def train_model(model, train_dataloader, val_dataloader, loss_f, optimizer, expl
             # Checkpoint epoch weights
             if (phase == "val") and (epoch % epoch_checkpoint == 0) and (epoch != 0):
                 log_print("\tCheckpointing weights for epoch %i" % (epoch + 1))
-                save_model_weights(model, "%s_%i" % (config.RUN_NAME, epoch))
+                save_model_weights(model, "%s_%i" % (config.AE_RUN_NAME, epoch))
 
     # Finish up
     time_elapsed = time.time() - init_time
@@ -224,7 +224,7 @@ def train_model_im_network(model_ae, model_im, train_dataloader, val_dataloader,
             epoch_loss = 0.0
             curr_loss = 0.0
             print_interval = 100
-            epoch_checkpoint = config.WEIGHTS_CHECKPOINT
+            epoch_checkpoint = config.IM_WEIGHTS_CHECKPOINT
             batch_count = 0
 
             for data in dataloader:
@@ -304,10 +304,10 @@ def train_autoencoder():
 
     # Set up model for training
     log_print("Creating model...")
-    model = create_model(config.VOXEL_RES, config.EMBED_SIZE)
+    model = create_model_3d_autoencoder(config.VOXEL_RES, config.EMBED_SIZE)
     load_success = False
-    if config.LOAD_WEIGHTS is not None:
-        load_success = try_load_weights(model, config.LOAD_WEIGHTS)
+    if config.AE_INIT_WEIGHTS is not None:
+        load_success = try_load_weights(model, config.AE_INIT_WEIGHTS)
     if config.GPU and torch.cuda.is_available():
         log_print("\tEnabling GPU")
         if config.MULTI_GPU and torch.cuda.device_count() > 1:
@@ -316,8 +316,8 @@ def train_autoencoder():
         model = model.cuda()
     else:
         log_print("\tIgnoring GPU (CPU only)")
-    if (config.LOAD_WEIGHTS is not None) and (load_success is False):
-        if not try_load_weights(model, config.LOAD_WEIGHTS):
+    if (config.AE_INIT_WEIGHTS is not None) and (load_success is False):
+        if not try_load_weights(model, config.AE_INIT_WEIGHTS):
             log_print("FAILED TO LOAD PRE-TRAINED WEIGHTS. EXITING")
             sys.exit(-1)
 
@@ -325,37 +325,20 @@ def train_autoencoder():
     loss_f = nn.BCELoss()
     if config.GPU and torch.cuda.is_available():
         loss_f = loss_f.cuda()
-    """
-    optimizer = optim.SGD(
-        model.parameters(), 
-        lr=config.LEARNING_RATE,
-        momentum=config.MOMENTUM)
-    """
     optimizer = optim.Adadelta(
         model.parameters(),
-        lr=config.LEARNING_RATE)
-    if config.STEP_SIZE is not None:
-        explorer = lr_scheduler.StepLR(
-            optimizer, 
-            step_size=config.STEP_SIZE,
-            gamma=config.GAMMA)
-    elif config.LR_STEPS is not None:
-        explorer = lr_scheduler.MultiStepLR(
-            optimizer,
-            config.LR_STEPS,
-            gamma=config.GAMMA)
-    else:
-        explorer = None
+        lr=config.AE_LEARNING_RATE)
+    explorer = None
 
     # Perform training
     log_print("~~~~~Starting training~~~~~")
-    model = train_model(model, train_dataloader, val_dataloader, loss_f, optimizer, explorer, config.EPOCHS)
+    model = train_model_ae3d(model, train_dataloader, val_dataloader, loss_f, optimizer, explorer, config.AE_EPOCHS)
     log_print("~~~~~Training finished~~~~~")
   
     # Save model weights
-    out_fp = os.path.join(config.OUT_WEIGHTS_DIR, "%s.pt" % config.RUN_NAME)
+    out_fp = os.path.join(config.OUT_WEIGHTS_DIR, "%s.pt" % config.AE_RUN_NAME)
     log_print("Saving model weights to %s..." % out_fp)
-    save_model_weights(model, config.RUN_NAME)
+    save_model_weights(model, config.AE_RUN_NAME)
     return
 
 def train_image_network():
@@ -374,7 +357,7 @@ def train_image_network():
     log_print("Creating image network and 3d-autoencoder models...")
     model_ae = create_model_3d_autoencoder(config.VOXEL_RES, config.EMBED_SIZE)
     model_im = create_model_image_network(config.EMBED_SIZE)
-    load_success = try_load_weights(model_ae, config.AE3D_LOAD_WEIGHTS)
+    load_success = try_load_weights(model_ae, config.IM_AE3D_LOAD_WEIGHTS)
     if config.GPU and torch.cuda.is_available():
         log_print("\tEnabling GPU")
         if config.MULTI_GPU and torch.cuda.device_count() > 1:
@@ -386,7 +369,7 @@ def train_image_network():
     else:
         log_print("\t Ignoring GPU (CPU only)")
     if not load_success:
-        load_success = try_load_weights(model_ae, config.AE3D_LOAD_WEIGHTS)
+        load_success = try_load_weights(model_ae, config.IM_AE3D_LOAD_WEIGHTS)
     if not load_success:
         log_print("COULDN'T LOAD AUTOENCODER WEIGHTS")
         sys.exit(-1)
@@ -412,6 +395,7 @@ def train_image_network():
     return
 
 def train_joint():
+    #TODO
     return
 
 #####################
@@ -421,8 +405,8 @@ def train_joint():
 def main():
 
     # Redirect output to log file
-    sys.stdout = open(config.OUT_LOG_FP, 'w')
-    sys.stderr = sys.stdout
+    #sys.stdout = open(config.OUT_LOG_FP, 'w')
+    #sys.stderr = sys.stdout
     log_print("Beginning script...")
 
     # Print beginning debug info
@@ -431,7 +415,7 @@ def main():
 
     # Run 3 step training process
     log_print("BEGINNING PART 1: train 3D autoencoder")
-    #train_autoencoder()
+    train_autoencoder()
     log_print("FINISHING PART 1") 
 
     log_print("BEGINNING PART 2: train image network")
@@ -439,7 +423,7 @@ def main():
     log_print("FINISHING PART 1") 
 
     log_print("BEGINNING PART 3: joint training")
-    #train_joint()
+    train_joint()
     log_print("FINISHING PART 3") 
 
     # Finished
