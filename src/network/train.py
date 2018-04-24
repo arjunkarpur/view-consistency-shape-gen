@@ -123,7 +123,7 @@ def train_model_ae3d(model, train_dataloader, val_dataloader, loss_f, optimizer,
             epoch_iou = 0.0
             curr_loss = 0.0
             curr_iou = 0.0
-            print_interval = 100
+            print_interval = config.AE_PRINT_INTERVAL
             epoch_checkpoint = config.AE_WEIGHTS_CHECKPOINT
             batch_count = 0
 
@@ -150,6 +150,8 @@ def train_model_ae3d(model, train_dataloader, val_dataloader, loss_f, optimizer,
                     optimizer.step()
 
                 # Calculate accuracy (IOU accuracy)
+                voxels = voxels.detach()
+                out_voxels = out_voxels.detach()
                 iou = calc_iou_acc(voxels, out_voxels, config.IOU_THRESH)
                 curr_iou += config.BATCH_SIZE * iou
 
@@ -162,7 +164,7 @@ def train_model_ae3d(model, train_dataloader, val_dataloader, loss_f, optimizer,
                         curr_iou = float(curr_iou) / float(print_interval*config.BATCH_SIZE)
                         log_print("\tBatches %i-%i -\tAvg Loss: %f ,  Avg IoU: %f" % (batch_count-print_interval+1, batch_count, curr_loss, curr_iou))
                     curr_loss = 0.0
-                    curr_iou
+                    curr_iou = 0.0
                 batch_count += 1
       
             # Report epoch results
@@ -223,7 +225,7 @@ def train_model_im_network(model_ae, model_im, train_dataloader, val_dataloader,
             # Iterate over dataset
             epoch_loss = 0.0
             curr_loss = 0.0
-            print_interval = 100
+            print_interval = config.IM_PRINT_INTERVAL
             epoch_checkpoint = config.IM_WEIGHTS_CHECKPOINT
             batch_count = 0
 
@@ -357,7 +359,9 @@ def train_image_network():
     log_print("Creating image network and 3d-autoencoder models...")
     model_ae = create_model_3d_autoencoder(config.VOXEL_RES, config.EMBED_SIZE)
     model_im = create_model_image_network(config.EMBED_SIZE)
-    load_success = try_load_weights(model_ae, config.IM_AE3D_LOAD_WEIGHTS)
+    load_success_ae = try_load_weights(model_ae, config.IM_AE3D_LOAD_WEIGHTS)
+    if config.IM_INIT_WEIGHTS is not None:
+        load_success_im = try_load_weights(model_im, config.IM_INIT_WEIGHTS)
     if config.GPU and torch.cuda.is_available():
         log_print("\tEnabling GPU")
         if config.MULTI_GPU and torch.cuda.device_count() > 1:
@@ -368,11 +372,16 @@ def train_image_network():
         model_im = model_im.cuda()
     else:
         log_print("\t Ignoring GPU (CPU only)")
-    if not load_success:
-        load_success = try_load_weights(model_ae, config.IM_AE3D_LOAD_WEIGHTS)
-    if not load_success:
-        log_print("COULDN'T LOAD AUTOENCODER WEIGHTS")
-        sys.exit(-1)
+    if not load_success_ae:
+        load_success_ae = try_load_weights(model_ae, config.IM_AE3D_LOAD_WEIGHTS)
+        if not load_success_ae:
+            log_print("COULDN'T LOAD AUTOENCODER WEIGHTS")
+            sys.exit(-1)
+    if config.IM_INIT_WEIGHTS is not None and not load_success_im:
+        load_success_im = try_load_weights(model_im, config.IM_INIT_WEIGHTS)
+        if not load_success_im:
+            log_print("COULDN'T LOAD IMAGE NETWORK INIT WEIGHTS")
+            sys.exit(-1)
 
     # Set up loss and optimizer
     loss_f = nn.MSELoss()
@@ -416,15 +425,15 @@ def main():
     # Run 3 step training process
     log_print("BEGINNING PART 1: train 3D autoencoder")
     train_autoencoder()
-    log_print("FINISHING PART 1") 
+    log_print("FINISHED PART 1") 
 
     log_print("BEGINNING PART 2: train image network")
     train_image_network()
-    log_print("FINISHING PART 1") 
+    log_print("FINISHED PART 1") 
 
     log_print("BEGINNING PART 3: joint training")
     train_joint()
-    log_print("FINISHING PART 3") 
+    log_print("FINISHED PART 3") 
 
     # Finished
     log_print("Script DONE!")

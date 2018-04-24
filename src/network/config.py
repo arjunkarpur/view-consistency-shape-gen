@@ -12,38 +12,41 @@ OUT_LOG_FP = "%s/logs/%s.log" % (OUT_BASE_DIR, RUN_NAME)
 # Program parameters
 GPU = True
 MULTI_GPU = True
+BATCH_SIZE = 32
 VOXEL_RES = 20
 IOU_THRESH = 0.5
-BATCH_SIZE = 32
 EMBED_SIZE = 64
 
 #####################################################################
 #   3D AUTOENCODER PARAMS
 AE_RUN_NAME = "ae3d"
-AE_INIT_WEIGHTS = None
+AE_INIT_WEIGHTS = "%s/models/chair-ae3d-long6/chair-ae3d-long6.pt" % OUT_BASE_DIR
 AE_LEARNING_RATE = 1.0
-AE_EPOCHS = 1
+AE_EPOCHS = 0
 AE_WEIGHTS_CHECKPOINT = 20
+AE_PRINT_INTERVAL = 20
 
 #####################################################################
 #   IMAGE NETWORK PARAMS
 IM_RUN_NAME = "im-network"
-IM_INIT_WEIGHTS = None
-IM_AE3D_LOAD_WEIGHTS = "%s/models/chair-ae3d-long6/chair-ae3d-long6.pt" % OUT_BASE_DIR
-IM_LEARNING_RATE = 1e-5
+IM_INIT_WEIGHTS = "%s/models/im-network-1/im-network-1.pt" % OUT_BASE_DIR
+IM_AE3D_LOAD_WEIGHTS = "%s/models/%s/%s.pt" % (OUT_BASE_DIR, RUN_NAME, AE_RUN_NAME)
+IM_LEARNING_RATE = 1e-8
 IM_MOMENTUM=0.9
-IM_EPOCHS = 1
+IM_EPOCHS = 0
 IM_WEIGHTS_CHECKPOINT = 5
+IM_PRINT_INTERVAL = 200
 
 ####################################################################
 #   JOINT TRAINING PARAMS
 JOINT_RUN_NAME = "joint"
-JOINT_AE3D_LOAD_WEIGHTS = "%s/models/chair-ae3d-long6/chair-ae3d-long6.pt" % OUT_BASE_DIR
-JOINT_IM_NET_LOAD_WEIGHTS = "%s/models/im-network-1/im-network-1.pt" % OUT_BASE_DIR
+JOINT_AE3D_LOAD_WEIGHTS = "%s/models/%s/%s.pt" % (OUT_BASE_DIR, RUN_NAME, AE_RUN_NAME)
+JOINT_IM_NET_LOAD_WEIGHTS = "%s/models/%s/%s.pt" % (OUT_BASE_DIR, RUN_NAME, IM_RUN_NAME)
 JOINT_LEARNING_RATE = 1e-5
 JOINT_MOMENTUM=0.9
-JOINT_EPOCHS = 1
+JOINT_EPOCHS = 0
 JOINT_WEIGHTS_CHECKPOINT = 5
+JOINT_PRINT_INTERVAL = 20
 
 #####################################################################
 # Debugging print method
@@ -65,9 +68,9 @@ def PRINT_CONFIG():
     print "~~Program parameters~~"
     print "GPU:\t\t\t\t", GPU 
     print "MULTI_GPU:\t\t\t", MULTI_GPU 
+    print "BATCH_SIZE:\t\t\t", BATCH_SIZE 
     print "VOXEL_RES:\t\t\t", VOXEL_RES 
     print "IOU_THRESH:\t\t\t", IOU_THRESH 
-    print "BATCH_SIZE:\t\t\t", BATCH_SIZE 
     print "EMBED_SIZE:\t\t\t", EMBED_SIZE 
     print " "
 
@@ -89,13 +92,12 @@ def PRINT_CONFIG():
     print "IM_WEIGHTS_CHECKPOINT:\t\t", IM_WEIGHTS_CHECKPOINT 
     print " "
 
-    #   JOINT TRAINING PARAMS
     print "~~Joint Training Params~~"
     print "JOINT_RUN_NAME:\t\t\t", JOINT_RUN_NAME 
     print "JOINT_AE3D_LOAD_WEIGHTS:\t", JOINT_AE3D_LOAD_WEIGHTS 
     print "JOINT_IM_NET_LOAD_WEIGHTS:\t", JOINT_IM_NET_LOAD_WEIGHTS 
     print "JOINT_LEARNING_RATE:\t\t", JOINT_LEARNING_RATE 
-    print "JOINT_MOMENTU:\t\t\t", JOINT_MOMENTUM
+    print "JOINT_MOMENTUM:\t\t\t", JOINT_MOMENTUM
     print "JOINT_EPOCHS:\t\t\t", JOINT_EPOCHS 
     print "JOINT_WEIGHTS_CHECKPOINT:\t", JOINT_WEIGHTS_CHECKPOINT 
     print " "
