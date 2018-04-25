@@ -49,6 +49,17 @@ def create_image_network_dataloader(dset_type_, data_base_dir_, batch_size_):
         num_workers=4)
     return dataloader
 
+def create_real_image_dataloader(dset_type_, data_base_dir_, batch_size_):
+    dataset = RealVoxelDataset(
+        dset_type=dset_type_,
+        data_base_dir=data_base_dir_)
+    dataloader = DataLoader(
+        dataset,
+        batch_size=batch_size_,
+        shuffle=True,
+        num_workers=4)
+    return dataloader
+
 def create_model_3d_autoencoder(voxel_res, embedding_size):
     model = AE_3D(voxel_res, embedding_size)
     return model

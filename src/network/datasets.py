@@ -103,3 +103,59 @@ class RenderingVoxelDataset:
         data['voxel'] = mat_data["data"].astype(int)
 
         return data
+
+class RealVoxelDataset:
+    def __init__(self, dset_type, data_base_dir):
+        self.data_base_dir = data_base_dir
+
+        # Read train/val/test split json
+        split_json_fp = os.path.join(self.data_base_dir, "json", "split.json")
+        split_json_f = open(split_json_fp, 'r')
+        split_json = json.loads(split_json_f.readlines()[0])
+        split_json_f.close()
+
+        # Extract list of model ids
+        assert(dset_type in split_json)
+        ids = set(split_json[dset_type])
+
+        # Get list of images
+        dir_ = os.path.join(self.data_base_dir, "processed", "images_v1")
+        self.ims = [f for f in os.listdir(dir_) if 
+            (os.path.isfile(os.path.join(dir_, f)) and f.split("_")[0] in ids)]
+
+        # Create transform for im renderings
+        #   2) Resize to 224x224 (in case not already)
+        #   3) randomly flip horizontally
+        #   3) rescale to 0->1 and reorder channels
+        #   4) normalize to imagenet mean
+        self.transform_im = transforms.Compose([
+            transforms.ToPILImage(),
+            transforms.Resize((224,224)),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+        ])
+        return
+
+    def __len__(self):
+        return len(self.ims)
+
+    def __getitem__(self, idx):
+
+        # Get im name and corresponding model id
+        im_name = self.ims[idx]
+        model_id = im_name.split("_")[0]
+        data = {}
+        data['im_name'] = im_name
+
+        # Load image and process w/ transforms
+        im_fp = os.path.join(self.data_base_dir, "processed", "images_v1", im_name)
+        img = cv2.imread(im_fp)
+        data['im'] = self.transform_im(img)
+
+        # Load voxel
+        mat_fp = os.path.join(self.data_base_dir, "voxels", "%s.mat" % model_id)
+        mat_data = scio.loadmat(mat_fp)
+        data['voxel'] = mat_data["data"].astype(int)
+
+        return data
