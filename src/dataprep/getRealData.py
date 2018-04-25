@@ -153,12 +153,13 @@ for model_id in xrange(1, num_models+1):
                 continue
 
             # Save image to .bmp
-            out_fp = os.path.join(SAVE_PATH, "%s_%s.bmp" % (model_count, frame_count))
-            print "Writing %s_%s.bmp" % (model_count, frame_count)
+            name = "%s_%s" % (model_name, frame_name)
+            out_fp = os.path.join(SAVE_PATH, "%s.bmp" % name)
+            print "Writing %s.bmp" % name
             cv2.imwrite(out_fp, out)
             frame_count += 1
     if frame_count > 20:
         model_count += 1
+        info.write('{} {}\n'.format(model_name, frame_count))  
     else:
         continue
-        info.write('{} {}\n'.format(model_count - 1, frame_count))  
