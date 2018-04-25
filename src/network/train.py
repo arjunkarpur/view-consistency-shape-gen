@@ -22,6 +22,9 @@ from models import AE_3D
 
 def log_print(string):
     print "[%s]\t %s" % (datetime.datetime.now(), string)
+    sys.stdout.flush()
+    os.fsync(sys.stdout.fileno())
+    return
 
 def create_shapenet_voxel_dataloader(dset_type_, data_base_dir_, batch_size_):
     dataset = ShapeNetVoxelDataset(
@@ -250,7 +253,6 @@ def train_model_im_network(model_ae, model_im, train_dataloader, val_dataloader,
                 if phase == "train":
                     loss.backward()
                     optimizer.step()
-                del im_embed, voxel_embed
 
                 # Output
                 if batch_count % print_interval == 0 and batch_count != 0:
@@ -288,7 +290,122 @@ def train_model_im_network(model_ae, model_im, train_dataloader, val_dataloader,
     log_print("Training completed in %sm %ss" % (time_elapsed // 60, time_elapsed % 60))
     model_im.load_state_dict(best_weights)
     return model_im
+    
 
+def train_model_joint(model_ae, model_im, train_dataloader, val_dataloader, loss_ae_f, loss_im_f, optimizer, explorer, epochs):
+
+    # Init metrics
+    init_time = time.time()
+    best_loss = float('inf')
+    best_weights_ae = model_ae.state_dict().copy()
+    best_weights_im = model_im.state_dict().copy()
+    best_epoch = -1
+
+    for epoch in xrange(epochs):
+        log_print("Epoch %i/%i: %i batches of %i images each" % (epoch+1, epochs, len(train_dataloader.dataset)/config.BATCH_SIZE, config.BATCH_SIZE))
+
+        for phase in ["train", "val"]:
+            if phase == "train":
+                if explorer is not None:
+                    explorer.step()
+                model_ae.train()
+                model_im.train()
+                dataloader = train_dataloader
+            else:
+                model_ae.eval()
+                model_im.eval()
+
+            # Iterate over dataset
+            epoch_loss_ae = epoch_loss_im = 0.0
+            curr_loss_ae = curr_loss_im = 0.0
+            epoch_iou = 0.0
+            curr_iou = 0.0
+            print_interval = config.JOINT_PRINT_INTERVAL
+            epoch_checkpoint = config.JOINT_WEIGHTS_CHECKPOINT
+            batch_count = 0
+
+            for data in dataloader:
+                
+                # Wrap in pytorch autograd vars
+                ims, voxels = data['im'], data['voxel']
+                if config.GPU and torch.cuda.is_available():
+                    ims = ims.cuda()
+                    voxels = voxels.cuda()
+                ims = Variable(ims).float()
+                voxels = Variable(voxels).float()
+
+                # Forward pass
+                optimizer.zero_grad()
+                im_embed = model_im(ims)
+                voxel_embed = model_ae.module._encode(voxels)
+                out_voxels = model_ae.module._decode(voxel_embed)
+
+                # Calc loss
+                loss_ae = config.JOINT_LAMBDA_AE * loss_ae_f(out_voxels, voxels)
+                #loss_im = config.JOINT_LAMBDA_IM * loss_im_f(im_embed, voxel_embed)
+                loss_im = config.JOINT_LAMBDA_IM * (
+                    torch.sum((im_embed - voxel_embed)**2) / im_embed.data.nelement())
+                total_loss = loss_ae + loss_im
+                curr_loss_ae += config.BATCH_SIZE * loss_ae.data[0]
+                curr_loss_im += config.BATCH_SIZE * loss_im.data[0]
+
+                # Backprop and cleanup
+                if phase == "train":
+                    total_loss.backward()
+                    optimizer.step()
+
+                # Calculate accuracy (IOU)
+                voxels = voxels.detach()
+                out_voxels = out_voxels.detach()
+                iou = calc_iou_acc(voxels, out_voxels, config.IOU_THRESH)
+                curr_iou += config.BATCH_SIZE * iou
+
+                # Output
+                if batch_count % print_interval == 0 and batch_count != 0:
+                    epoch_loss_ae += curr_loss_ae
+                    epoch_loss_im += curr_loss_im
+                    epoch_iou += curr_iou
+                    if phase == "train":
+                        curr_loss_ae = float(curr_loss_ae) / float(print_interval*config.BATCH_SIZE)
+                        curr_loss_im = float(curr_loss_im) / float(print_interval*config.BATCH_SIZE)
+                        curr_iou = float(curr_iou) / float(print_interval*config.BATCH_SIZE)
+                        log_print("\tBatches %i-%i -\tAvg Loss: %f | Avg AE Loss: %f , Avg Im Loss: %f , Avg IoU: %f" % (batch_count-print_interval+1, batch_count, curr_loss_ae+curr_loss_im, curr_loss_ae, curr_loss_im, curr_iou))
+                    curr_loss_ae = curr_loss_im = curr_iou = 0.0
+                batch_count += 1
+
+            # Report epoch results
+            num_images = len(dataloader.dataset)
+            epoch_loss_ae = float(epoch_loss_ae + curr_loss_ae) / float(num_images)
+            epoch_loss_im = float(epoch_loss_im + curr_loss_im) / float(num_images)
+            total_epoch_loss = epoch_loss_ae + epoch_loss_im
+            epoch_iou = float(epoch_iou + curr_iou) / float(num_images)
+            log_print("\tEPOCH %i [%s] - Avg Loss: %f | Avg AE Loss: %f , Avg Im Loss: %f , Avg IoU: %f" % (epoch+1, phase, total_epoch_loss, epoch_loss_ae, epoch_loss_im, epoch_iou))
+
+            # Save best model weights
+            err_improvement = best_loss - total_epoch_loss
+            if phase == "val":
+                if err_improvement >= 0 or epoch == 0:
+                    log_print("\tBEST NEW EPOCH: %i" % (epoch+1))
+                    best_loss = total_epoch_loss
+                    best_weights_ae = model_ae.state_dict().copy()
+                    best_weights_im = model_im.state_dict().copy()
+                    best_epoch = epoch
+                else:
+                    log_print("\tCurrent best epoch: %i, %f loss" % (best_epoch, best_loss))
+
+            # Checkpoint epoch weights
+            if (phase == "val") and (epoch % epoch_checkpoint == 0):
+                log_print("\tCheckpoint weights for epoch %i" % (epoch + 1))
+                save_model_weights(model_ae, "%s_ae_%i" % (config.JOINT_RUN_NAME, epoch))
+                save_model_weights(model_im, "%s_im_%i" % (config.JOINT_RUN_NAME, epoch))
+
+    # Finish up
+    time_elapsed = time.time() - init_time
+    log_print("BEST EPOCH: %i/%i - Loss: %f" % (best_epoch+1, epochs, best_loss))
+    log_print("Training completed in %sm %ss" % (time_elapsed // 60, time_elapsed % 60))
+    model_ae.load_state_dict(best_weights_ae)
+    model_im.load_state_dict(best_weights_im)
+    return (model_ae, model_im)
 
 def train_autoencoder():
     # Create training DataLoader
@@ -321,7 +438,6 @@ def train_autoencoder():
     if (config.AE_INIT_WEIGHTS is not None) and (load_success is False):
         if not try_load_weights(model, config.AE_INIT_WEIGHTS):
             log_print("FAILED TO LOAD PRE-TRAINED WEIGHTS. EXITING")
-            sys.exit(-1)
 
     # Set up loss and optimizer
     loss_f = nn.BCELoss()
@@ -373,24 +489,25 @@ def train_image_network():
     else:
         log_print("\t Ignoring GPU (CPU only)")
     if not load_success_ae:
-        load_success_ae = try_load_weights(model_ae, config.IM_AE3D_LOAD_WEIGHTS)
-        if not load_success_ae:
+        if not try_load_weights(model_ae, config.IM_AE3D_LOAD_WEIGHTS):
             log_print("COULDN'T LOAD AUTOENCODER WEIGHTS")
-            sys.exit(-1)
     if config.IM_INIT_WEIGHTS is not None and not load_success_im:
-        load_success_im = try_load_weights(model_im, config.IM_INIT_WEIGHTS)
-        if not load_success_im:
+        if not try_load_weights(model_im, config.IM_INIT_WEIGHTS):
             log_print("COULDN'T LOAD IMAGE NETWORK INIT WEIGHTS")
-            sys.exit(-1)
 
     # Set up loss and optimizer
     loss_f = nn.MSELoss()
     if config.GPU and torch.cuda.is_available():
         loss_f = loss_f.cuda()
+    """
     optimizer = optim.SGD(
         filter(lambda p: p.requires_grad, model_im.parameters()),
         lr=config.IM_LEARNING_RATE,
         momentum=config.IM_MOMENTUM)
+    """
+    optimizer = optim.Adadelta(
+        filter(lambda p: p.requires_grad, model_im.parameters()),
+        lr=config.IM_LEARNING_RATE)
     explorer = None
 
     # Perform training
@@ -404,7 +521,67 @@ def train_image_network():
     return
 
 def train_joint():
-    #TODO
+
+    # Load train + val data
+    log_print("Loading training data...")
+    train_dataloader = \
+        create_image_network_dataloader(
+            "train",
+            config.DATA_BASE_DIR,
+            config.BATCH_SIZE)
+    val_dataloader = \
+        create_image_network_dataloader(
+            "val",
+            config.DATA_BASE_DIR,
+            config.BATCH_SIZE)
+
+    # Create models
+    log_print("Creating image network and 3d-autoencoder models...")
+    model_ae = create_model_3d_autoencoder(config.VOXEL_RES, config.EMBED_SIZE)
+    model_im = create_model_image_network(config.EMBED_SIZE)
+    load_success_ae = try_load_weights(model_ae, config.JOINT_AE3D_LOAD_WEIGHTS)
+    load_success_im = try_load_weights(model_im, config.JOINT_IM_LOAD_WEIGHTS)
+    if config.GPU and torch.cuda.is_available():
+        log_print("\tEnabling GPU")
+        if config.MULTI_GPU and torch.cuda.device_count() > 1:
+            log_print("\tUsing multiple GPUs: %i" % torch.cuda.device_count())
+            model_ae = nn.DataParallel(model_ae)
+            model_im = nn.DataParallel(model_im)
+        model_ae = model_ae.cuda()
+        model_im = model_im.cuda()
+    else:
+        log_print("\t Ignoring GPU (CPU only)")
+    if not load_success_ae:
+        if not (try_load_weights(model_ae, config.JOINT_AE3D_LOAD_WEIGHTS)):
+            log_print("FAILED TO LOAD AE3D WEIGHTS")
+    if not load_success_im:
+        if not try_load_weights(model_im, config.JOINT_IM_LOAD_WEIGHTS):
+            log_print("FAILED TO LOAD IMAGE NETWORK WEIGHTS")
+
+    # Set up loss and optimizer
+    loss_ae = nn.BCELoss()
+    loss_im = nn.MSELoss()
+    if config.GPU and torch.cuda.is_available():
+        loss_ae = loss_ae.cuda()
+        loss_im = loss_im.cuda()
+    params = list(model_ae.parameters()) + \
+        list(filter(lambda p: p.requires_grad, model_im.parameters()))
+    optimizer = optim.SGD(
+        params,
+        lr=config.JOINT_LEARNING_RATE,
+        momentum=config.JOINT_MOMENTUM)
+    explorer = None
+
+    # Perform training
+    log_print("~~~~~Start training~~~~~")
+    model_ae, model_im = train_model_joint(model_ae, model_im, train_dataloader, val_dataloader, loss_ae, loss_im, optimizer, explorer, config.JOINT_EPOCHS)
+    log_print("~~~~~Training finished~~~~~")
+
+    # Save model weights
+    log_print("Saving model weights")
+    save_model_weights(model_ae, "%s_ae3d" % config.JOINT_RUN_NAME)
+    save_model_weights(model_im, "%s_im" % config.JOINT_RUN_NAME)
+
     return
 
 #####################
@@ -414,8 +591,8 @@ def train_joint():
 def main():
 
     # Redirect output to log file
-    #sys.stdout = open(config.OUT_LOG_FP, 'w')
-    #sys.stderr = sys.stdout
+    sys.stdout = open(config.OUT_LOG_FP, 'w')
+    sys.stderr = sys.stdout
     log_print("Beginning script...")
 
     # Print beginning debug info
@@ -423,17 +600,17 @@ def main():
     config.PRINT_CONFIG()
 
     # Run 3 step training process
-    log_print("BEGINNING PART 1: train 3D autoencoder")
+    log_print("***BEGINNING PART 1: train 3D autoencoder")
     train_autoencoder()
-    log_print("FINISHED PART 1") 
+    log_print("***FINISHED PART 1") 
 
-    log_print("BEGINNING PART 2: train image network")
+    log_print("***BEGINNING PART 2: train image network")
     train_image_network()
-    log_print("FINISHED PART 1") 
+    log_print("***FINISHED PART 1") 
 
-    log_print("BEGINNING PART 3: joint training")
+    log_print("***BEGINNING PART 3: joint training")
     train_joint()
-    log_print("FINISHED PART 3") 
+    log_print("***FINISHED PART 3") 
 
     # Finished
     log_print("Script DONE!")

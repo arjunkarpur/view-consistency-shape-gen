@@ -1,7 +1,7 @@
 
 # Filepaths
-RUN_NAME = "testtest"
-RUN_DESCRIPTION = "test refactor"
+RUN_NAME = "joint-train-only-1"
+RUN_DESCRIPTION = "train using the joint loss only (last step)"
 PROJ_BASE_DIR = "../.."
 OBJECT_CLASS = "CHAIR"
 DATA_BASE_DIR = "%s/data/%s" % (PROJ_BASE_DIR, OBJECT_CLASS)
@@ -20,7 +20,7 @@ EMBED_SIZE = 64
 #####################################################################
 #   3D AUTOENCODER PARAMS
 AE_RUN_NAME = "ae3d"
-AE_INIT_WEIGHTS = "%s/models/chair-ae3d-long6/chair-ae3d-long6.pt" % OUT_BASE_DIR
+AE_INIT_WEIGHTS = "%s/models/jointtest/joint_ae3d.pt" % OUT_BASE_DIR
 AE_LEARNING_RATE = 1.0
 AE_EPOCHS = 0
 AE_WEIGHTS_CHECKPOINT = 20
@@ -29,9 +29,9 @@ AE_PRINT_INTERVAL = 20
 #####################################################################
 #   IMAGE NETWORK PARAMS
 IM_RUN_NAME = "im-network"
-IM_INIT_WEIGHTS = "%s/models/im-network-1/im-network-1.pt" % OUT_BASE_DIR
+IM_INIT_WEIGHTS = "%s/models/jointtest/joint_im.pt" % OUT_BASE_DIR
 IM_AE3D_LOAD_WEIGHTS = "%s/models/%s/%s.pt" % (OUT_BASE_DIR, RUN_NAME, AE_RUN_NAME)
-IM_LEARNING_RATE = 1e-8
+IM_LEARNING_RATE = 1e-3
 IM_MOMENTUM=0.9
 IM_EPOCHS = 0
 IM_WEIGHTS_CHECKPOINT = 5
@@ -41,12 +41,14 @@ IM_PRINT_INTERVAL = 200
 #   JOINT TRAINING PARAMS
 JOINT_RUN_NAME = "joint"
 JOINT_AE3D_LOAD_WEIGHTS = "%s/models/%s/%s.pt" % (OUT_BASE_DIR, RUN_NAME, AE_RUN_NAME)
-JOINT_IM_NET_LOAD_WEIGHTS = "%s/models/%s/%s.pt" % (OUT_BASE_DIR, RUN_NAME, IM_RUN_NAME)
+JOINT_IM_LOAD_WEIGHTS = "%s/models/%s/%s.pt" % (OUT_BASE_DIR, RUN_NAME, IM_RUN_NAME)
 JOINT_LEARNING_RATE = 1e-5
-JOINT_MOMENTUM=0.9
-JOINT_EPOCHS = 0
-JOINT_WEIGHTS_CHECKPOINT = 5
-JOINT_PRINT_INTERVAL = 20
+JOINT_MOMENTUM = 0.9
+JOINT_EPOCHS = 7
+JOINT_LAMBDA_AE = 635.0
+JOINT_LAMBDA_IM = 1.0
+JOINT_WEIGHTS_CHECKPOINT = 1
+JOINT_PRINT_INTERVAL = 200
 
 #####################################################################
 # Debugging print method
@@ -80,6 +82,7 @@ def PRINT_CONFIG():
     print "AE_LEARNING_RATE:\t\t", AE_LEARNING_RATE 
     print "AE_EPOCHS:\t\t\t", AE_EPOCHS 
     print "AE_WEIGHTS_CHECKPOINT:\t\t", AE_WEIGHTS_CHECKPOINT 
+    print "AE_PRINT_INTERVAL:\t\t", AE_PRINT_INTERVAL
     print " "
 
     print "~~Image Network Params~~"
@@ -90,16 +93,20 @@ def PRINT_CONFIG():
     print "IM_MOMENTUM:\t\t\t", IM_MOMENTUM
     print "IM_EPOCHS:\t\t\t", IM_EPOCHS 
     print "IM_WEIGHTS_CHECKPOINT:\t\t", IM_WEIGHTS_CHECKPOINT 
+    print "IM_PRINT_INTERVAL:\t\t", IM_PRINT_INTERVAL
     print " "
 
     print "~~Joint Training Params~~"
     print "JOINT_RUN_NAME:\t\t\t", JOINT_RUN_NAME 
     print "JOINT_AE3D_LOAD_WEIGHTS:\t", JOINT_AE3D_LOAD_WEIGHTS 
-    print "JOINT_IM_NET_LOAD_WEIGHTS:\t", JOINT_IM_NET_LOAD_WEIGHTS 
+    print "JOINT_IM_LOAD_WEIGHTS:\t\t", JOINT_IM_LOAD_WEIGHTS 
     print "JOINT_LEARNING_RATE:\t\t", JOINT_LEARNING_RATE 
     print "JOINT_MOMENTUM:\t\t\t", JOINT_MOMENTUM
     print "JOINT_EPOCHS:\t\t\t", JOINT_EPOCHS 
+    print "JOINT_LAMBDA_AE:\t\t", JOINT_LAMBDA_AE
+    print "JOINT_LAMBDA_IM:\t\t", JOINT_LAMBDA_IM
     print "JOINT_WEIGHTS_CHECKPOINT:\t", JOINT_WEIGHTS_CHECKPOINT 
+    print "JOINT_PRINT_INTERVAL:\t\t", JOINT_PRINT_INTERVAL
     print " "
 
     print "~~~~~~ END CONFIG ~~~~~~"
