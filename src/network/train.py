@@ -396,7 +396,7 @@ def train_model_joint(model_ae, model_im, train_dataloader, val_dataloader, loss
             # Checkpoint epoch weights
             if (phase == "val") and (epoch % epoch_checkpoint == 0):
                 log_print("\tCheckpoint weights for epoch %i" % (epoch + 1))
-                save_model_weights(model_ae, "%s_ae_%i" % (config.JOINT_RUN_NAME, epoch))
+                save_model_weights(model_ae, "%s_ae3d_%i" % (config.JOINT_RUN_NAME, epoch))
                 save_model_weights(model_im, "%s_im_%i" % (config.JOINT_RUN_NAME, epoch))
 
     # Finish up

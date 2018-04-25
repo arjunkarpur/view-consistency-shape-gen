@@ -22,15 +22,15 @@ MULTI_GPU = True
 OBJ_CLASS = "CHAIR"
 NAME = "joint-train-only-1"
 DATA_BASE_DIR = "../../data/%s" % OBJ_CLASS
-IN_AE_WEIGHTS_FP = "../../output/%s/models/%s/joint_ae_1.pt" % (OBJ_CLASS, NAME)
-IN_IM_WEIGHTS_FP = "../../output/%s/models/%s/joint_im_1.pt" % (OBJ_CLASS, NAME)
+IN_AE_WEIGHTS_FP = "../../output/%s/models/%s/joint_ae3d.pt" % (OBJ_CLASS, NAME)
+IN_IM_WEIGHTS_FP = "../../output/%s/models/%s/joint_im.pt" % (OBJ_CLASS, NAME)
 OUTPUT_DIR = "../../output/%s/preds/%s" % (OBJ_CLASS, NAME)
 OUTPUT_PROB_DIR = "%s/prob" % OUTPUT_DIR
 OUTPUT_BINARY_DIR = "%s/binary" % OUTPUT_DIR
 
 VOXEL_RES = 20
 EMBED_SIZE = 64
-BATCH_SIZE = 64
+BATCH_SIZE = 128
 BIN_THRESHES = \
     [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
 

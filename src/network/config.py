@@ -1,7 +1,7 @@
 
 # Filepaths
-RUN_NAME = "joint-train-only-1"
-RUN_DESCRIPTION = "train using the joint loss only (last step)"
+RUN_NAME = "joint-train-only-2"
+RUN_DESCRIPTION = "train using the joint loss only (last step). more training on top of the 8 other epochs"
 PROJ_BASE_DIR = "../.."
 OBJECT_CLASS = "CHAIR"
 DATA_BASE_DIR = "%s/data/%s" % (PROJ_BASE_DIR, OBJECT_CLASS)
@@ -20,7 +20,7 @@ EMBED_SIZE = 64
 #####################################################################
 #   3D AUTOENCODER PARAMS
 AE_RUN_NAME = "ae3d"
-AE_INIT_WEIGHTS = "%s/models/jointtest/joint_ae3d.pt" % OUT_BASE_DIR
+AE_INIT_WEIGHTS = "%s/models/joint-train-only-1/joint_ae3d.pt" % OUT_BASE_DIR
 AE_LEARNING_RATE = 1.0
 AE_EPOCHS = 0
 AE_WEIGHTS_CHECKPOINT = 20
@@ -29,7 +29,7 @@ AE_PRINT_INTERVAL = 20
 #####################################################################
 #   IMAGE NETWORK PARAMS
 IM_RUN_NAME = "im-network"
-IM_INIT_WEIGHTS = "%s/models/jointtest/joint_im.pt" % OUT_BASE_DIR
+IM_INIT_WEIGHTS = "%s/models/joint-train-only-1/joint_im.pt" % OUT_BASE_DIR
 IM_AE3D_LOAD_WEIGHTS = "%s/models/%s/%s.pt" % (OUT_BASE_DIR, RUN_NAME, AE_RUN_NAME)
 IM_LEARNING_RATE = 1e-3
 IM_MOMENTUM=0.9
@@ -45,7 +45,7 @@ JOINT_IM_LOAD_WEIGHTS = "%s/models/%s/%s.pt" % (OUT_BASE_DIR, RUN_NAME, IM_RUN_N
 JOINT_LEARNING_RATE = 1e-5
 JOINT_MOMENTUM = 0.9
 JOINT_EPOCHS = 7
-JOINT_LAMBDA_AE = 635.0
+JOINT_LAMBDA_AE = 200.0
 JOINT_LAMBDA_IM = 1.0
 JOINT_WEIGHTS_CHECKPOINT = 1
 JOINT_PRINT_INTERVAL = 200
