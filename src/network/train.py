@@ -13,7 +13,7 @@ from torch.optim import lr_scheduler
 from torch.utils.data import DataLoader
 
 # Imports from src files
-from datasets import ShapeNetVoxelDataset, RenderingVoxelDataset
+from datasets import ShapeNetVoxelDataset, ImageVoxelDataset
 from models import AE_3D
 
 #####################
@@ -39,18 +39,7 @@ def create_shapenet_voxel_dataloader(dset_type_, data_base_dir_, batch_size_):
     return dataloader
 
 def create_image_network_dataloader(dset_type_, data_base_dir_, batch_size_):
-    dataset = RenderingVoxelDataset(
-        dset_type=dset_type_,
-        data_base_dir=data_base_dir_)
-    dataloader = DataLoader(
-        dataset,
-        batch_size=batch_size_,
-        shuffle=True,
-        num_workers=4)
-    return dataloader
-
-def create_real_image_dataloader(dset_type_, data_base_dir_, batch_size_):
-    dataset = RealVoxelDataset(
+    dataset = ImageVoxelDataset(
         dset_type=dset_type_,
         data_base_dir=data_base_dir_)
     dataloader = DataLoader(

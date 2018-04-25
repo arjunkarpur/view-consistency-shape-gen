@@ -14,7 +14,7 @@ import torchvision as tv
 import scipy.io as scio
 
 # Imports from src files
-from datasets import RenderingVoxelDataset
+from datasets import ImageVoxelDataset
 from models import AE_3D
 
 GPU = True
@@ -42,7 +42,7 @@ def log_print(string):
     print "[%s]\t %s" % (datetime.datetime.now(), string)
 
 def create_image_network_dataloader(dset_type_, data_base_dir_, batch_size_):
-    dataset = RenderingVoxelDataset(
+    dataset = ImageVoxelDataset(
         dset_type=dset_type_,
         data_base_dir=data_base_dir_)
     dataloader = DataLoader(

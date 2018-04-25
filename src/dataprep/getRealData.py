@@ -153,8 +153,11 @@ for model_id in xrange(1, num_models+1):
                 continue
 
             # Save image to .bmp
-            name = "%s_%s" % (model_name, frame_name)
-            out_fp = os.path.join(SAVE_PATH, "%s.bmp" % name)
+            name = "_%s_%s" % (model_name, frame_name)
+            model_dir = os.path.join(SAVE_PATH, model_name)
+            if not os.path.exists(model_dir):
+                os.makedirs(model_dir)
+            out_fp = os.path.join(model_dir,"%s.bmp" % name)
             print "Writing %s.bmp" % name
             cv2.imwrite(out_fp, out)
             frame_count += 1
