@@ -4,7 +4,8 @@ import json
 import random
 import scipy.io as sio
 import matplotlib.pyplot as plt
-import matplotlib.image as mpimg
+import numpy as np
+from PIL import Image
 from mpl_toolkits.mplot3d import Axes3D
 
 pred_dir = "../../output/CHAIR/preds/joint-train-only-1/binary/0_4"
@@ -29,8 +30,21 @@ for f in pred_files:
 
     # Get input image
     im_fp = im_dir + "/".join(f.split("/")[-2:]).split(".")[0] + ".jpg"
-    im = mpimg.imread(im_fp)
-    print im.shape
+    im = Image.open(im_fp)
+
+    # Resize so min dimension is 347
+    re_min = 347
+    w,h = im.size
+    if (w < h):
+        new_w = re_min
+        new_h = int(re_min * (float(h)/float(w)))
+    else:
+        new_h = re_min
+        new_w = int(re_min * (float(w)/float(h)))
+    im = im.resize((new_w, new_h), Image.ANTIALIAS)
+
+    # Crop center
+    im = np.array(im)
     y,x,_ = im.shape
     startx = x//2-(224//2)
     starty = y//2-(224//2)
