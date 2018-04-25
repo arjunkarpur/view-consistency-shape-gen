@@ -90,6 +90,7 @@ class RenderingVoxelDataset:
         im_name = self.ims[idx]
         id_ = im_name.split("_")[1]
         data = {}
+        data['im_name'] = im_name
 
         # Load image and process w/ transforms
         im_fp = os.path.join(self.data_base_dir, "renderings", id_, im_name)
