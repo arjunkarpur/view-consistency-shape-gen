@@ -12,14 +12,12 @@ class VoxelDataset(Dataset):
     """
     Instance vars:
         - self.data_base_dir (string with root data dir)
-        - self.transform
         - self.ids
     """
 
-    def __init__(self, dset_type, data_base_dir, transform=None):
+    def __init__(self, dset_type, data_base_dir):
         # Save input
         self.data_base_dir = data_base_dir
-        self.transform = transform
 
         # Read train/val/test split json
         split_json_fp = os.path.join(self.data_base_dir, "json", "split.json")

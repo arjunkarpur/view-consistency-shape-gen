@@ -10,6 +10,7 @@ import torch.optim as optim
 from torch.autograd import Variable
 from torch.optim import lr_scheduler
 from torch.utils.data import DataLoader
+import torch.backends.cudnn as cudnn
 import torchvision as tv
 import scipy.io as scio
 
@@ -217,6 +218,7 @@ def main():
         log_print("\tIgnoring GPU (CPU only)")
     model_ae.load_state_dict(torch.load(IN_AE_WEIGHTS_FP))
     model_im.load_state_dict(torch.load(IN_IM_WEIGHTS_FP))
+    cudnn.benchmark = True
 
     # Perform testing and save mats
     log_print("Generating predictions...")

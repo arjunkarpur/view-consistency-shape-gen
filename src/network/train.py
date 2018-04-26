@@ -1,16 +1,18 @@
 import os
 import sys
-import math
-import config
-import datetime
 import time
+import math
 import torch
+import config
+import random
+import datetime
 import torch.nn as nn
-import torch.optim as optim
 import torchvision as tv
+import torch.optim as optim
+import torch.backends.cudnn as cudnn
 from torch.autograd import Variable
 from torch.optim import lr_scheduler
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, sampler
 
 # Imports from src files
 from datasets import VoxelDataset, ImageVoxelDataset
@@ -26,28 +28,43 @@ def log_print(string):
     os.fsync(sys.stdout.fileno())
     return
 
-def create_shapenet_voxel_dataloader(dset_type_, data_base_dir_, batch_size_):
-    dataset = VoxelDataset(
-        dset_type=dset_type_,
-        data_base_dir=data_base_dir_,
-        transform=tv.transforms.Compose([tv.transforms.ToTensor()]))
+###########################
+#   DATA
+
+def create_dataloader_from_dataset(dataset_, batch_size_, subset_size_=None):
+
+    # Subset of dataset
+    if subset_size is not None:
+        indices = range(len(dataset))
+        indices = random.sample(indices, min(subset_size_, len(dataset)))
+        sampler_ = sampler.SubsetRandomSampler(indices)
+        shuffle_ = False
+    else:
+        sampler_ = None
+        shuffle_ = True
+
     dataloader = DataLoader(
         dataset,
+        sampler=sampler_,
         batch_size=batch_size_,
-        shuffle=True,
+        shuffle=shuffle_,
         num_workers=4)
     return dataloader
 
-def create_image_network_dataloader(dset_type_, data_base_dir_, batch_size_):
-    dataset = ImageVoxelDataset(
+def create_shapenet_voxel_dataloader(dset_type_, data_base_dir_, batch_size_, subset_size_=None):
+    dataset_ = VoxelDataset(
         dset_type=dset_type_,
         data_base_dir=data_base_dir_)
-    dataloader = DataLoader(
-        dataset,
-        batch_size=batch_size_,
-        shuffle=True,
-        num_workers=4)
-    return dataloader
+    return create_dataloader_from_dataset(dataset_, batch_size, subset_size_)
+
+def create_image_network_dataloader(dset_type_, data_base_dir_, batch_size_, subset_size=None):
+    dataset_ = ImageVoxelDataset(
+        dset_type=dset_type_,
+        data_base_dir=data_base_dir_)
+    return create_dataloader_from_dataset(dataset_, batch_size_, subset_size)
+    
+######################
+#   MODELS
 
 def create_model_3d_autoencoder(voxel_res, embedding_size):
     model = AE_3D(voxel_res, embedding_size)
@@ -71,18 +88,6 @@ def create_model_image_network(embedding_size):
         child_counter += 1
     return model
 
-def calc_iou_acc(gt, pred, bin_thresh):
-    pred[pred < bin_thresh] = 0
-    pred[pred >= bin_thresh] = 1
-    gt = gt.int()
-    pred = pred.int()
-    total = 0.0
-    for i in xrange(gt.size(0)):
-        intersect = (gt[i] * pred[i]).data.nonzero()
-        union = (torch.add(gt[i],pred[i])).data.nonzero()
-        total += (float(len(intersect)) / float(len(union)))
-    return (float(total) / float(gt.size(0)))
-
 def save_model_weights(model, name):
     dir_ = config.OUT_WEIGHTS_DIR
     if not os.path.exists(dir_):
@@ -96,6 +101,22 @@ def try_load_weights(model, fp):
         return True
     except:
         return False
+
+############################
+#   TRAINING HELPERS
+
+def calc_iou_acc(gt, pred, bin_thresh):
+    pred[pred < bin_thresh] = 0
+    pred[pred >= bin_thresh] = 1
+    gt = gt.int()
+    pred = pred.int()
+    total = 0.0
+    for i in xrange(gt.size(0)):
+        intersect = (gt[i] * pred[i]).data.nonzero()
+        union = (torch.add(gt[i],pred[i])).data.nonzero()
+        total += (float(len(intersect)) / float(len(union)))
+    return (float(total) / float(gt.size(0)))
+
 
 def train_model_ae3d(model, train_dataloader, val_dataloader, loss_f, optimizer, explorer, epochs):
 
@@ -117,9 +138,11 @@ def train_model_ae3d(model, train_dataloader, val_dataloader, loss_f, optimizer,
                     explorer.step()
                 model.eval()
                 dataloader = train_dataloader
+                log_print("\tTRAINING: %i ims" % len(dataloader.dataset))
             else:
                 model.train()
                 dataloader = val_dataloader
+                log_print("\tVALIDATION: %i ims" % len(dataloader.dataset))
 
             # Iterate over dataset
             epoch_loss = 0.0
@@ -221,9 +244,11 @@ def train_model_im_network(model_ae, model_im, train_dataloader, val_dataloader,
                     explorer.step()
                 model_im.train()
                 dataloader = train_dataloader
+                log_print("\tTRAINING: %i ims" % len(dataloader.dataset))
             else:
                 model_im.eval()
                 dataloader = val_dataloader
+                log_print("\tVALIDATION: %i ims" % len(dataloader.dataset))
 
             # Iterate over dataset
             epoch_loss = 0.0
@@ -311,9 +336,12 @@ def train_model_joint(model_ae, model_im, train_dataloader, val_dataloader, loss
                 model_ae.train()
                 model_im.train()
                 dataloader = train_dataloader
+                log_print("\tTRAINING: %i ims" % len(dataloader.dataset))
             else:
                 model_ae.eval()
                 model_im.eval()
+                dataloader = val_dataloader
+                log_print("\tVALIDATION: %i ims" % len(dataloader.dataset))
 
             # Iterate over dataset
             epoch_loss_ae = epoch_loss_im = 0.0
@@ -406,6 +434,9 @@ def train_model_joint(model_ae, model_im, train_dataloader, val_dataloader, loss
     model_ae.load_state_dict(best_weights_ae)
     model_im.load_state_dict(best_weights_im)
     return (model_ae, model_im)
+
+#######################
+#   TRAINING MAINS
 
 def train_autoencoder():
     # Create training DataLoader
@@ -599,6 +630,9 @@ def main():
     log_print("Printing config file...")
     config.PRINT_CONFIG()
 
+    # Use cudnn bencharmking
+    cudnn.benchmark = True
+
     # Run 3 step training process
     log_print("***BEGINNING PART 1: train 3D autoencoder")
     train_autoencoder()
@@ -606,7 +640,7 @@ def main():
 
     log_print("***BEGINNING PART 2: train image network")
     train_image_network()
-    log_print("***FINISHED PART 1") 
+    log_print("***FINISHED PART 2") 
 
     log_print("***BEGINNING PART 3: joint training")
     train_joint()

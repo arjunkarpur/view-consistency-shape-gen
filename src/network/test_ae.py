@@ -11,6 +11,7 @@ from torch.autograd import Variable
 from torch.optim import lr_scheduler
 from torch.utils.data import DataLoader
 from torchvision import transforms
+import torch.backends.cudnn as cudnn
 import scipy.io as scio
 
 # Imports from src files
@@ -193,6 +194,7 @@ def main():
     else:
         log_print("\tIgnoring GPU (CPU only)")
     model.load_state_dict(torch.load(IN_WEIGHTS_FP))
+    cudnn.benchmark = True
 
     # Perform testing and save mats
     log_print("Generating predictions...")
