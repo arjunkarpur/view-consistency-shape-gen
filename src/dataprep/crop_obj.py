@@ -5,8 +5,8 @@ import sys
 
 # Input
 model_id = sys.argv[1].split(".")[0]
-padding = 0.01
-floor_lambda = 0.05
+padding = 0.1
+floor_lambda = 0.0
 DATA_BASE_DIR = "/home/arjun/research/thesis/shape-gen/data/RedwoodRGB_Chair/other/"
 SRC_DIR = os.path.join(DATA_BASE_DIR, "meshes", "meshes_obj")
 DEST_DIR = os.path.join(DATA_BASE_DIR, "meshes", "meshes_crop_obj")
@@ -68,8 +68,8 @@ print 'v:',len(verts), ", f:", len(faces)
 vert_ctr = 1
 reassign = {}
 new_verts = []
-for i in xrange(len(verts)):
-    v = verts[i]
+for i in xrange(1,len(verts)):
+    v = verts[i-1]
     valid = True
     for dim in xrange(3):
         if v[dim] < mins[dim] or v[dim] > maxs[dim]:
@@ -90,7 +90,19 @@ for i in xrange(len(faces)):
 print "Num new faces:", len(new_faces)
 
 # Center mesh along the center
-#TODO
+print "Centering around origin..."
+avgs = [0.0, 0.0, 0.0]
+for v in new_verts:
+    for i in xrange(3):
+        avgs[i] += v[i]
+for i in xrange(3):
+    avgs[i] /= len(new_verts)
+for i in xrange(len(new_verts)):
+    v = new_verts[i]
+    for j in xrange(3):
+        v[j] -= avgs[j]
+    new_verts[i] = v
+
 
 print "Writing new mesh to file"
 out_fp = os.path.join(DEST_DIR, "%s.obj" % model_id)
@@ -99,8 +111,7 @@ for v in new_verts:
     out_f.write("v %f %f %f\n" % (v[0], v[1], v[2]))
 out_f.write("\n")
 for f in new_faces:
-    #TODO: faces broken
-    #out_f.write("f %i %i %i\n" % (f[0], f[1], f[2]))
+    out_f.write("f %i %i %i\n" % (f[0], f[1], f[2]))
     pass
 out_f.close()
 
