@@ -8,7 +8,7 @@ import scipy.io as scio
 from torch.utils.data import Dataset 
 from torchvision import transforms
 
-class ShapeNetVoxelDataset(Dataset):
+class VoxelDataset(Dataset):
     """
     Instance vars:
         - self.data_base_dir (string with root data dir)

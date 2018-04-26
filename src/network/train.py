@@ -13,7 +13,7 @@ from torch.optim import lr_scheduler
 from torch.utils.data import DataLoader
 
 # Imports from src files
-from datasets import ShapeNetVoxelDataset, ImageVoxelDataset
+from datasets import VoxelDataset, ImageVoxelDataset
 from models import AE_3D
 
 #####################
@@ -27,7 +27,7 @@ def log_print(string):
     return
 
 def create_shapenet_voxel_dataloader(dset_type_, data_base_dir_, batch_size_):
-    dataset = ShapeNetVoxelDataset(
+    dataset = VoxelDataset(
         dset_type=dset_type_,
         data_base_dir=data_base_dir_,
         transform=tv.transforms.Compose([tv.transforms.ToTensor()]))

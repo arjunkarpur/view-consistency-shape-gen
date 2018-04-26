@@ -14,7 +14,7 @@ from torchvision import transforms
 import scipy.io as scio
 
 # Imports from src files
-from datasets import ShapeNetVoxelDataset
+from datasets import VoxelDataset
 from models import AE_3D
 
 GPU = True
@@ -41,7 +41,7 @@ def log_print(string):
     print "[%s]\t %s" % (datetime.datetime.now(), string)
 
 def create_shapenet_voxel_dataloader(dset_type_, data_base_dir_, batch_size_):
-    dataset = ShapeNetVoxelDataset(
+    dataset = VoxelDataset(
         dset_type=dset_type_,
         data_base_dir=data_base_dir_,
         transform=transforms.Compose([transforms.ToTensor()]))
