@@ -9,7 +9,7 @@ from PIL import Image
 from mpl_toolkits.mplot3d import Axes3D
 
 pred_dir = "../../output/CHAIR/preds/joint-train-only-1/binary/0_4"
-im_dir = "../../data/CHAIR/renderings/"
+im_dir = "../../data/CHAIR/input_ims/"
 gt_dir = "../../data/CHAIR/mat/"
 
 pred_files = []

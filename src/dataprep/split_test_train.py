@@ -10,7 +10,7 @@ test_split = 0.15
 in_f = open("../../data/CHAIR/json/name_to_id.json", 'r')
 names = (json.loads((in_f.readlines()[0]).strip())).keys()
 """
-in_f = open("./meshes-chair125.txt")
+in_f = open("./meshes-chair122.txt")
 names = [n.strip().split('.')[0] for n in in_f.readlines()]
 in_f.close()
 random.shuffle(names)
