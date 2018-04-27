@@ -1,5 +1,6 @@
 import os
 import sys
+import copy
 import time
 import math
 import torch
@@ -34,9 +35,9 @@ def log_print(string):
 def create_dataloader_from_dataset(dataset_, batch_size_, subset_size_=None):
 
     # Subset of dataset
-    if subset_size is not None:
-        indices = range(len(dataset))
-        indices = random.sample(indices, min(subset_size_, len(dataset)))
+    if subset_size_ is not None:
+        indices = range(len(dataset_))
+        indices = random.sample(indices, min(subset_size_, len(dataset_)))
         sampler_ = sampler.SubsetRandomSampler(indices)
         shuffle_ = False
     else:
@@ -44,7 +45,7 @@ def create_dataloader_from_dataset(dataset_, batch_size_, subset_size_=None):
         shuffle_ = True
 
     dataloader = DataLoader(
-        dataset,
+        dataset_,
         sampler=sampler_,
         batch_size=batch_size_,
         shuffle=shuffle_,
@@ -55,13 +56,13 @@ def create_shapenet_voxel_dataloader(dset_type_, data_base_dir_, batch_size_, su
     dataset_ = VoxelDataset(
         dset_type=dset_type_,
         data_base_dir=data_base_dir_)
-    return create_dataloader_from_dataset(dataset_, batch_size, subset_size_)
+    return create_dataloader_from_dataset(dataset_, batch_size_, subset_size_)
 
-def create_image_network_dataloader(dset_type_, data_base_dir_, batch_size_, subset_size=None):
+def create_image_network_dataloader(dset_type_, data_base_dir_, batch_size_, subset_size_=None):
     dataset_ = ImageVoxelDataset(
         dset_type=dset_type_,
         data_base_dir=data_base_dir_)
-    return create_dataloader_from_dataset(dataset_, batch_size_, subset_size)
+    return create_dataloader_from_dataset(dataset_, batch_size_, subset_size_)
     
 ######################
 #   MODELS
@@ -93,7 +94,7 @@ def save_model_weights(model, name):
     if not os.path.exists(dir_):
         os.makedirs(dir_)
     fp = os.path.join(dir_, "%s.pt" % name)
-    torch.save(model.state_dict().copy(), fp)
+    torch.save(model.state_dict(), fp)
 
 def try_load_weights(model, fp):
     try:
@@ -122,27 +123,30 @@ def train_model_ae3d(model, train_dataloader, val_dataloader, loss_f, optimizer,
 
     init_time = time.time()
     best_loss = float('inf')
-    best_weights = model.state_dict().copy()
+    best_model = copy.deepcopy(model)
     best_epoch = -1
 
-    for epoch in xrange(epochs):
+    for epoch in xrange(1, epochs+1):
         lr = []
         for param_group in optimizer.param_groups:
             lr += [str(param_group['lr'])]
 
-        log_print("Epoch %i/%i: %i batches of %i images each. LR: [%s]" % (epoch+1, epochs, len(train_dataloader.dataset)/config.BATCH_SIZE, config.BATCH_SIZE, ','.join(lr)))
+        log_print("Epoch %i/%i: LR: [%s]" % (epoch, epochs, ','.join(lr)))
 
         for phase in ["train", "val"]:
             if phase == "train":
                 if explorer is not None:
                     explorer.step()
-                model.eval()
-                dataloader = train_dataloader
-                log_print("\tTRAINING: %i ims" % len(dataloader.dataset))
-            else:
                 model.train()
+                dataloader = train_dataloader
+            else:
+                model.eval()
                 dataloader = val_dataloader
-                log_print("\tVALIDATION: %i ims" % len(dataloader.dataset))
+            if dataloader.sampler is None:
+                num_images = len(dataloader.dataset)
+            else:
+                num_images = len(dataloader.sampler)
+            log_print("\t[%s] - %i ims, %i batches" % (phase, num_images, num_images/config.BATCH_SIZE))
 
             # Iterate over dataset
             epoch_loss = 0.0
@@ -168,18 +172,21 @@ def train_model_ae3d(model, train_dataloader, val_dataloader, loss_f, optimizer,
 
                 # Calculate loss
                 loss = loss_f(out_voxels.float(), voxels.float())
-                curr_loss += config.BATCH_SIZE * loss.data[0]
+                curr_loss += voxels.size(0) * loss.data[0]
 
                 # Backward pass (if train)
                 if phase == "train":
                     loss.backward()
                     optimizer.step()
+                else:
+                    # Switch back to train before any saving
+                    model.train()
 
                 # Calculate accuracy (IOU accuracy)
                 voxels = voxels.detach()
                 out_voxels = out_voxels.detach()
                 iou = calc_iou_acc(voxels, out_voxels, config.IOU_THRESH)
-                curr_iou += config.BATCH_SIZE * iou
+                curr_iou += voxels.size(0) * iou
 
                 # Output
                 if batch_count % print_interval == 0 and batch_count != 0:
@@ -188,40 +195,44 @@ def train_model_ae3d(model, train_dataloader, val_dataloader, loss_f, optimizer,
                     if phase == "train":
                         curr_loss = float(curr_loss) / float(print_interval*config.BATCH_SIZE)
                         curr_iou = float(curr_iou) / float(print_interval*config.BATCH_SIZE)
-                        log_print("\tBatches %i-%i -\tAvg Loss: %f ,  Avg IoU: %f" % (batch_count-print_interval+1, batch_count, curr_loss, curr_iou))
+                        if batch_count < 100:
+                            log_print("\tBatches %i-%i -\t\tAvg Loss: %f ,  Avg IoU: %f" % (batch_count-print_interval+1, batch_count, curr_loss, curr_iou))
+                        else:
+                            log_print("\tBatches %i-%i -\tAvg Loss: %f ,  Avg IoU: %f" % (batch_count-print_interval+1, batch_count, curr_loss, curr_iou))
                     curr_loss = 0.0
                     curr_iou = 0.0
                 batch_count += 1
       
             # Report epoch results
-            num_images = len(dataloader.dataset)
             epoch_loss = float(epoch_loss+curr_loss) / float(num_images)
             epoch_iou = float(epoch_iou+curr_iou) / float(num_images)
-            log_print("\tEPOCH %i [%s] - Avg Loss: %f , Avg IoU: %f" % (epoch+1, phase, epoch_loss, epoch_iou))
+            log_print("\tEPOCH %i [%s] - Avg Loss: %f , Avg IoU: %f" % (epoch, phase, epoch_loss, epoch_iou))
 
             # Save best model weights from epoch
             err_improvement = best_loss - epoch_loss 
             if phase == "val":
-                if err_improvement >= 0 or epoch == 0:
-                    log_print("\tBEST NEW EPOCH: %i" % (epoch+1))
+                if err_improvement >= 0:
+                    if not model.module.training:
+                        log_print("ERROR: should be in training mode before saving")
+                        model.train()
+                    log_print("\tBEST NEW EPOCH: %i" % epoch)
                     best_loss = epoch_loss
-                    best_weights = model.state_dict().copy()
+                    best_model.load_state_dict(model.state_dict())
                     best_epoch = epoch
+                    save_model_weights(best_model, config.AE_RUN_NAME)
                 else:
                     log_print("\tCurrent best epoch: %i, %f loss" % (best_epoch, best_loss))
 
             # Checkpoint epoch weights
-            if (phase == "val") and (epoch % epoch_checkpoint == 0) and (epoch != 0):
-                log_print("\tCheckpointing weights for epoch %i" % (epoch + 1))
+            if (phase == "val") and (epoch % epoch_checkpoint == 0):
+                log_print("\tCheckpointing weights for epoch %i" % epoch)
                 save_model_weights(model, "%s_%i" % (config.AE_RUN_NAME, epoch))
 
     # Finish up
     time_elapsed = time.time() - init_time
-    log_print("BEST EPOCH: %i/%i - Loss: %f" % (best_epoch+1, epochs, best_loss))
+    log_print("BEST EPOCH: %i/%i - Loss: %f" % (best_epoch, epochs, best_loss))
     log_print("Training completed in %sm %ss" % (time_elapsed // 60, time_elapsed % 60))
-    model.load_state_dict(best_weights)
-    return model
-
+    return best_model
 
 def train_model_im_network(model_ae, model_im, train_dataloader, val_dataloader, loss_f, optimizer, explorer, epochs):
 
@@ -231,12 +242,12 @@ def train_model_im_network(model_ae, model_im, train_dataloader, val_dataloader,
         
     init_time = time.time()
     best_loss = float('inf')
-    best_weights = model_im.state_dict().copy()
+    best_model = copy.deepcopy(model_im)
     best_epoch = -1
     model_ae.eval()
 
-    for epoch in xrange(epochs):
-        log_print("Epoch %i/%i: %i batches of %i images each" % (epoch+1, epochs, len(train_dataloader.dataset)/config.BATCH_SIZE, config.BATCH_SIZE))
+    for epoch in xrange(1, epochs+1):
+        log_print("Epoch %i/%i:" % (epoch, epochs))
 
         for phase in ["train", "val"]:
             if phase == "train":
@@ -244,11 +255,14 @@ def train_model_im_network(model_ae, model_im, train_dataloader, val_dataloader,
                     explorer.step()
                 model_im.train()
                 dataloader = train_dataloader
-                log_print("\tTRAINING: %i ims" % len(dataloader.dataset))
             else:
                 model_im.eval()
                 dataloader = val_dataloader
-                log_print("\tVALIDATION: %i ims" % len(dataloader.dataset))
+            if dataloader.sampler is None:
+                num_images = len(dataloader.dataset)
+            else:
+                num_images = len(dataloader.sampler)
+            log_print("\t[%s] - %i ims, %i batches" % (phase, num_images, num_images/config.BATCH_SIZE))
 
             # Iterate over dataset
             epoch_loss = 0.0
@@ -272,12 +286,14 @@ def train_model_im_network(model_ae, model_im, train_dataloader, val_dataloader,
                 im_embed = model_im(ims)
                 voxel_embed = model_ae.module._encode(voxels)
                 loss = loss_f(im_embed, voxel_embed)
-                curr_loss += config.BATCH_SIZE * loss.data[0]
+                curr_loss += voxels.size(0) * loss.data[0]
 
                 # Backprop and cleanup
                 if phase == "train":
                     loss.backward()
                     optimizer.step()
+                else:
+                    model_im.train()
 
                 # Output
                 if batch_count % print_interval == 0 and batch_count != 0:
@@ -289,32 +305,34 @@ def train_model_im_network(model_ae, model_im, train_dataloader, val_dataloader,
                 batch_count += 1
 
             # Report epoch results
-            num_images = len(dataloader.dataset)
             epoch_loss = float(epoch_loss + curr_loss) / float(num_images)
-            log_print("\tEPOCH %i [%s] - Avg Loss: %f" % (epoch+1, phase, epoch_loss))
+            log_print("\tEPOCH %i [%s] - Avg Loss: %f" % (epoch, phase, epoch_loss))
             
             # Save best model weights from epoch
             err_improvement = best_loss - epoch_loss 
             if phase == "val":
-                if err_improvement >= 0 or epoch == 0:
-                    log_print("\tBEST NEW EPOCH: %i" % (epoch+1))
+                if err_improvement >= 0:
+                    if not model_im.module.training:
+                        log_print("ERROR! Should be in training mode before saving")
+                        model.train()
+                    log_print("\tBEST NEW EPOCH: %i" % epoch)
                     best_loss = epoch_loss
-                    best_weights = model_im.state_dict().copy()
+                    best_model.load_state_dict(model_im.state_dict())
                     best_epoch = epoch
+                    save_model_weights(best_model, config.IM_RUN_NAME)
                 else:
                     log_print("\tCurrent best epoch: %i, %f loss" % (best_epoch, best_loss))
 
             # Checkpoint epoch weights
-            if (phase == "val") and (epoch % epoch_checkpoint == 0) and (epoch != 0):
-                log_print("\tCheckpointing weights for epoch %i" % (epoch + 1))
+            if (phase == "val") and (epoch % epoch_checkpoint == 0):
+                log_print("\tCheckpointing weights for epoch %i" % epoch)
                 save_model_weights(model_im, "%s_%i" % (config.IM_RUN_NAME, epoch))
 
     # Finish up
     time_elapsed = time.time() - init_time
-    log_print("BEST EPOCH: %i/%i - Loss: %f" % (best_epoch+1, epochs, best_loss))
+    log_print("BEST EPOCH: %i/%i - Loss: %f" % (best_epoch, epochs, best_loss))
     log_print("Training completed in %sm %ss" % (time_elapsed // 60, time_elapsed % 60))
-    model_im.load_state_dict(best_weights)
-    return model_im
+    return best_model
     
 
 def train_model_joint(model_ae, model_im, train_dataloader, val_dataloader, loss_ae_f, loss_im_f, optimizer, explorer, epochs):
@@ -322,13 +340,44 @@ def train_model_joint(model_ae, model_im, train_dataloader, val_dataloader, loss
     # Init metrics
     init_time = time.time()
     best_loss = float('inf')
-    best_weights_ae = model_ae.state_dict().copy()
-    best_weights_im = model_im.state_dict().copy()
+    best_model_ae = copy.deepcopy(model_ae)
+    best_model_im = copy.deepcopy(model_im)
     best_epoch = -1
+    lambda_ae = 1.0
 
-    for epoch in xrange(epochs):
-        log_print("Epoch %i/%i: %i batches of %i images each" % (epoch+1, epochs, len(train_dataloader.dataset)/config.BATCH_SIZE, config.BATCH_SIZE))
+    # Auto-calc scaling lambda
+    model_ae.eval()
+    model_im.eval()
+    loss_ae = 0.0
+    loss_im = 0.0
+    for data in train_dataloader:
+        # Wrap in pytorch autograd vars
+        ims, voxels = data['im'], data['voxel']
+        if config.GPU and torch.cuda.is_available():
+            ims = ims.cuda()
+            voxels = voxels.cuda()
+        ims = Variable(ims).float()
+        voxels = Variable(voxels).float()
 
+        # Forward pass
+        optimizer.zero_grad()
+        im_embed = model_im(ims)
+        voxel_embed = model_ae.module._encode(voxels)
+        out_voxels = model_ae.module._decode(voxel_embed)
+
+        # Calc loss
+        loss_ae += loss_ae_f(out_voxels, voxels)
+        loss_im += torch.sum((im_embed - voxel_embed)**2) / im_embed.data.nelement()
+
+    lambda_ae = float(loss_im) / float(loss_ae)
+    print loss_im, loss_ae, lambda_ae
+    loss_im = loss_ae = 0.0
+    model_ae.train()
+    model_im.train()
+    log_print("\t Calculated lambda AE init: %f" % lambda_ae)
+
+    for epoch in xrange(1, epochs+1):
+        log_print("Epoch %i/%i" % (epoch, epochs))
         for phase in ["train", "val"]:
             if phase == "train":
                 if explorer is not None:
@@ -336,12 +385,16 @@ def train_model_joint(model_ae, model_im, train_dataloader, val_dataloader, loss
                 model_ae.train()
                 model_im.train()
                 dataloader = train_dataloader
-                log_print("\tTRAINING: %i ims" % len(dataloader.dataset))
             else:
                 model_ae.eval()
                 model_im.eval()
                 dataloader = val_dataloader
-                log_print("\tVALIDATION: %i ims" % len(dataloader.dataset))
+            if dataloader.sampler is None:
+                num_images = len(dataloader.dataset)
+            else:
+                num_images = len(dataloader.sampler)
+            log_print("\t[%s] - %i ims, %i batches" % (phase, num_images, num_images/config.BATCH_SIZE))
+
 
             # Iterate over dataset
             epoch_loss_ae = epoch_loss_im = 0.0
@@ -369,24 +422,25 @@ def train_model_joint(model_ae, model_im, train_dataloader, val_dataloader, loss
                 out_voxels = model_ae.module._decode(voxel_embed)
 
                 # Calc loss
-                loss_ae = config.JOINT_LAMBDA_AE * loss_ae_f(out_voxels, voxels)
-                #loss_im = config.JOINT_LAMBDA_IM * loss_im_f(im_embed, voxel_embed)
-                loss_im = config.JOINT_LAMBDA_IM * (
-                    torch.sum((im_embed - voxel_embed)**2) / im_embed.data.nelement())
+                loss_ae = lambda_ae * loss_ae_f(out_voxels, voxels)
+                loss_im = torch.sum((im_embed - voxel_embed)**2) / im_embed.data.nelement()
                 total_loss = loss_ae + loss_im
-                curr_loss_ae += config.BATCH_SIZE * loss_ae.data[0]
-                curr_loss_im += config.BATCH_SIZE * loss_im.data[0]
+                curr_loss_ae += voxels.size(0) * loss_ae.data[0]
+                curr_loss_im += voxels.size(0) * loss_im.data[0]
 
                 # Backprop and cleanup
                 if phase == "train":
                     total_loss.backward()
                     optimizer.step()
+                else:
+                    model_ae.train()
+                    model_im.train()
 
                 # Calculate accuracy (IOU)
                 voxels = voxels.detach()
                 out_voxels = out_voxels.detach()
                 iou = calc_iou_acc(voxels, out_voxels, config.IOU_THRESH)
-                curr_iou += config.BATCH_SIZE * iou
+                curr_iou += voxels.size(0) * iou
 
                 # Output
                 if batch_count % print_interval == 0 and batch_count != 0:
@@ -402,38 +456,41 @@ def train_model_joint(model_ae, model_im, train_dataloader, val_dataloader, loss
                 batch_count += 1
 
             # Report epoch results
-            num_images = len(dataloader.dataset)
             epoch_loss_ae = float(epoch_loss_ae + curr_loss_ae) / float(num_images)
             epoch_loss_im = float(epoch_loss_im + curr_loss_im) / float(num_images)
             total_epoch_loss = epoch_loss_ae + epoch_loss_im
             epoch_iou = float(epoch_iou + curr_iou) / float(num_images)
-            log_print("\tEPOCH %i [%s] - Avg Loss: %f | Avg AE Loss: %f , Avg Im Loss: %f , Avg IoU: %f" % (epoch+1, phase, total_epoch_loss, epoch_loss_ae, epoch_loss_im, epoch_iou))
+            log_print("\tEPOCH %i [%s] - Avg Loss: %f | Avg AE Loss: %f , Avg Im Loss: %f , Avg IoU: %f" % (epoch, phase, total_epoch_loss, epoch_loss_ae, epoch_loss_im, epoch_iou))
 
             # Save best model weights
             err_improvement = best_loss - total_epoch_loss
             if phase == "val":
-                if err_improvement >= 0 or epoch == 0:
-                    log_print("\tBEST NEW EPOCH: %i" % (epoch+1))
+                if err_improvement >= 0:
+                    if (not model_ae.module.training) or (not model_im.module.training):
+                        log_print("ERROR! Must be in training mode before saving weights")
+                        model_ae.train()
+                        model_im.train()
+                    log_print("\tBEST NEW EPOCH: %i" % epoch)
                     best_loss = total_epoch_loss
-                    best_weights_ae = model_ae.state_dict().copy()
-                    best_weights_im = model_im.state_dict().copy()
+                    best_model_ae.load_state_dict(model_ae.state_dict())
+                    best_model_im.load_state_dict(model_im.state_dict())
                     best_epoch = epoch
+                    save_model_weights(model_ae, "%s_ae3d" % config.JOINT_RUN_NAME)
+                    save_model_weights(model_im, "%s_im" % config.JOINT_RUN_NAME)
                 else:
                     log_print("\tCurrent best epoch: %i, %f loss" % (best_epoch, best_loss))
 
             # Checkpoint epoch weights
             if (phase == "val") and (epoch % epoch_checkpoint == 0):
-                log_print("\tCheckpoint weights for epoch %i" % (epoch + 1))
+                log_print("\tCheckpoint weights for epoch %i" % epoch)
                 save_model_weights(model_ae, "%s_ae3d_%i" % (config.JOINT_RUN_NAME, epoch))
                 save_model_weights(model_im, "%s_im_%i" % (config.JOINT_RUN_NAME, epoch))
 
     # Finish up
     time_elapsed = time.time() - init_time
-    log_print("BEST EPOCH: %i/%i - Loss: %f" % (best_epoch+1, epochs, best_loss))
+    log_print("BEST EPOCH: %i/%i - Loss: %f" % (best_epoch, epochs, best_loss))
     log_print("Training completed in %sm %ss" % (time_elapsed // 60, time_elapsed % 60))
-    model_ae.load_state_dict(best_weights_ae)
-    model_im.load_state_dict(best_weights_im)
-    return (model_ae, model_im)
+    return (best_model_ae, best_model_im)
 
 #######################
 #   TRAINING MAINS
@@ -445,12 +502,14 @@ def train_autoencoder():
         create_shapenet_voxel_dataloader(
             "train",
             config.DATA_BASE_DIR,
-            config.BATCH_SIZE) 
+            config.BATCH_SIZE,
+            subset_size_=config.AE_SUBSET_SIZE_TRAIN)
     val_dataloader = \
         create_shapenet_voxel_dataloader(
             "val",
             config.DATA_BASE_DIR,
-            config.BATCH_SIZE)
+            config.BATCH_SIZE,
+            subset_size_=config.AE_SUBSET_SIZE_VAL)
 
     # Set up model for training
     log_print("Creating model...")
@@ -496,12 +555,14 @@ def train_image_network():
         create_image_network_dataloader(
             "train",
             config.DATA_BASE_DIR,
-            config.BATCH_SIZE)
+            config.BATCH_SIZE,
+            subset_size_=config.IM_SUBSET_SIZE_TRAIN)
     val_dataloader = \
         create_image_network_dataloader(
             "val",
             config.DATA_BASE_DIR,
-            config.BATCH_SIZE)
+            config.BATCH_SIZE,
+            subset_size_=config.IM_SUBSET_SIZE_VAL)
 
     log_print("Creating image network and 3d-autoencoder models...")
     model_ae = create_model_3d_autoencoder(config.VOXEL_RES, config.EMBED_SIZE)
@@ -559,12 +620,14 @@ def train_joint():
         create_image_network_dataloader(
             "train",
             config.DATA_BASE_DIR,
-            config.BATCH_SIZE)
+            config.BATCH_SIZE,
+            subset_size_=config.JOINT_SUBSET_SIZE_TRAIN)
     val_dataloader = \
         create_image_network_dataloader(
             "val",
             config.DATA_BASE_DIR,
-            config.BATCH_SIZE)
+            config.BATCH_SIZE,
+            subset_size_=config.JOINT_SUBSET_SIZE_VAL)
 
     # Create models
     log_print("Creating image network and 3d-autoencoder models...")
