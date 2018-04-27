@@ -3,6 +3,7 @@ import cv2
 import time
 import json
 import torch
+import random
 import numpy as np
 import scipy.io as scio
 from torch.utils.data import Dataset 
@@ -58,9 +59,12 @@ class ImageVoxelDataset:
 
         # Get list of images
         self.ims = []
+        self.im_counts = {}
         for id_ in ids:
+            id_ = str(id_)
             dir_ = os.path.join(self.data_base_dir, "input_ims", id_)
             files = [f for f in os.listdir(dir_) if os.path.isfile(os.path.join(dir_, f))]
+            self.im_counts[id_] = len(files)
             self.ims += files
 
         # Create transform for image
@@ -104,4 +108,36 @@ class ImageVoxelDataset:
         mat_data = scio.loadmat(mat_fp)
         data['voxel'] = mat_data["data"].astype(int)
 
+        return data
+
+class FusionDataset(Dataset):
+    def __init__(self, src_dataset, target_dataset, src_subset_size=None, target_subset_size=None):
+        self.src_dataset = src_dataset
+        self.target_dataset = target_dataset
+
+        # Subset if necessary
+        if src_subset_size is None:
+            self.src_inds = range(len(self.src_dataset))
+        else:
+            self.src_inds = random.sample(
+                range(len(self.src_dataset)), 
+                min(src_subset_size, len(self.src_dataset)))
+        if target_subset_size is None:
+            self.target_inds = range(len(self.target_dataset))
+        else:
+            self.target_inds = random.sample(
+                range(len(self.target_dataset)), 
+                min(target_subset_size, len(self.target_dataset)))
+        return
+
+    def __len__(self):
+        return len(self.src_inds) + len(self.target_inds)
+
+    def __getitem__(self, idx):
+        if idx < len(self.src_inds):
+            data = self.src_dataset[self.src_inds[idx]]
+            data['domain'] = 'src'
+        else:
+            data = self.target_dataset[self.target_inds[idx - len(self.src_inds)]]
+            data['domain'] = 'target'
         return data

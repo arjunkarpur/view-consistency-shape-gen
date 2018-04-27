@@ -1,7 +1,7 @@
 
 # Filepaths
-RUN_NAME = "tl-default"
-RUN_DESCRIPTION = "full run of 3 steps for training the tl-embedding."
+RUN_NAME = "testviewconsistency"
+RUN_DESCRIPTION = "testingviewconsistency"
 PROJ_BASE_DIR = "../.."
 OBJECT_CLASS = "CHAIR"
 DATA_BASE_DIR = "%s/data/%s" % (PROJ_BASE_DIR, OBJECT_CLASS)
@@ -20,9 +20,9 @@ EMBED_SIZE = 64
 #####################################################################
 #   3D AUTOENCODER PARAMS
 AE_RUN_NAME = "ae3d"
-AE_INIT_WEIGHTS = None
+AE_INIT_WEIGHTS = "../../output/CHAIR/models/tl-default-2/ae3d.pt"
 AE_LEARNING_RATE = 1.0
-AE_EPOCHS = 200
+AE_EPOCHS = 0
 AE_WEIGHTS_CHECKPOINT = 20
 AE_PRINT_INTERVAL = 20
 AE_SUBSET_SIZE_TRAIN = None
@@ -31,11 +31,11 @@ AE_SUBSET_SIZE_VAL= None
 #####################################################################
 #   IMAGE NETWORK PARAMS
 IM_RUN_NAME = "im-network"
-IM_INIT_WEIGHTS = None
+IM_INIT_WEIGHTS = "../../output/CHAIR/models/tl-default-2/im-network.pt"
 IM_AE3D_LOAD_WEIGHTS = "%s/models/%s/%s.pt" % (OUT_BASE_DIR, RUN_NAME, AE_RUN_NAME)
-IM_LEARNING_RATE = 1e-5
+IM_LEARNING_RATE = 1e-3
 IM_MOMENTUM=0.9
-IM_EPOCHS = 20
+IM_EPOCHS = 0
 IM_WEIGHTS_CHECKPOINT = 5
 IM_PRINT_INTERVAL = 200
 IM_SUBSET_SIZE_TRAIN = None
@@ -48,11 +48,24 @@ JOINT_AE3D_LOAD_WEIGHTS = "%s/models/%s/%s.pt" % (OUT_BASE_DIR, RUN_NAME, AE_RUN
 JOINT_IM_LOAD_WEIGHTS = "%s/models/%s/%s.pt" % (OUT_BASE_DIR, RUN_NAME, IM_RUN_NAME)
 JOINT_LEARNING_RATE = 1e-5
 JOINT_MOMENTUM = 0.9
-JOINT_EPOCHS = 50
+JOINT_EPOCHS = 0
 JOINT_WEIGHTS_CHECKPOINT = 5
 JOINT_PRINT_INTERVAL = 200
 JOINT_SUBSET_SIZE_TRAIN = None
 JOINT_SUBSET_SIZE_VAL= None
+
+####################################################################
+#   VIEW CONSISTENCY PARAMS
+VIEW_RUN_NAME = "view"
+VIEW_SRC_DATA_BASE_DIR = DATA_BASE_DIR
+VIEW_TARGET_DATA_BASE_DIR = "%s/data/RedwoodRGB_Chair" % PROJ_BASE_DIR
+VIEW_AE3D_LOAD_WEIGHTS = "%s/models/%s/%s_ae3d.pt" % (OUT_BASE_DIR, RUN_NAME, JOINT_RUN_NAME)
+VIEW_IM_LOAD_WEIGHTS = "%s/models/%s/%s_im.pt" % (OUT_BASE_DIR, RUN_NAME, JOINT_RUN_NAME)
+VIEW_LEARNING_RATE = 1e-5
+VIEW_MOMENTUM = 0.9
+VIEW_INIT_AVG = 0.18
+VIEW_SUBSET_SIZE_TRAIN = None
+VIEW_SUBSET_SIZE_VAL = None
 
 #####################################################################
 # Debugging print method

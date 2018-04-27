@@ -16,8 +16,9 @@ from torch.optim import lr_scheduler
 from torch.utils.data import DataLoader, sampler
 
 # Imports from src files
-from datasets import VoxelDataset, ImageVoxelDataset
+from datasets import VoxelDataset, ImageVoxelDataset, FusionDataset
 from models import AE_3D
+import optim_latent
 
 #####################
 #   BEGIN HELPERS   #
@@ -25,8 +26,8 @@ from models import AE_3D
 
 def log_print(string):
     print "[%s]\t %s" % (datetime.datetime.now(), string)
-    sys.stdout.flush()
-    os.fsync(sys.stdout.fileno())
+    #TODO: sys.stdout.flush()
+    #TODO: os.fsync(sys.stdout.fileno())
     return
 
 ###########################
@@ -62,6 +63,18 @@ def create_image_network_dataloader(dset_type_, data_base_dir_, batch_size_, sub
     dataset_ = ImageVoxelDataset(
         dset_type=dset_type_,
         data_base_dir=data_base_dir_)
+    return create_dataloader_from_dataset(dataset_, batch_size_, subset_size_)
+
+def create_view_consistency_dataloader(dset_type_, src_data_base_dir_, target_data_base_dir_, batch_size_, subset_size_=None):
+    src_dataset = ImageVoxelDataset(
+        dset_type=dset_type_,
+        data_base_dir=src_data_base_dir_)
+    target_dataset = ImageVoxelDataset(
+        dset_type=dset_type_,
+        data_base_dir=target_data_base_dir_)
+    dataset_ = FusionDataset(
+        src_dataset,
+        target_dataset)
     return create_dataloader_from_dataset(dataset_, batch_size_, subset_size_)
     
 ######################
@@ -118,13 +131,12 @@ def calc_iou_acc(gt, pred, bin_thresh):
         total += (float(len(intersect)) / float(len(union)))
     return (float(total) / float(gt.size(0)))
 
-
 def train_model_ae3d(model, train_dataloader, val_dataloader, loss_f, optimizer, explorer, epochs):
 
     init_time = time.time()
     best_loss = float('inf')
     best_model = copy.deepcopy(model)
-    best_epoch = -1
+    best_epoch = 0
 
     for epoch in xrange(1, epochs+1):
         lr = []
@@ -232,6 +244,7 @@ def train_model_ae3d(model, train_dataloader, val_dataloader, loss_f, optimizer,
     time_elapsed = time.time() - init_time
     log_print("BEST EPOCH: %i/%i - Loss: %f" % (best_epoch, epochs, best_loss))
     log_print("Training completed in %sm %ss" % (time_elapsed // 60, time_elapsed % 60))
+    del model
     return best_model
 
 def train_model_im_network(model_ae, model_im, train_dataloader, val_dataloader, loss_f, optimizer, explorer, epochs):
@@ -243,7 +256,7 @@ def train_model_im_network(model_ae, model_im, train_dataloader, val_dataloader,
     init_time = time.time()
     best_loss = float('inf')
     best_model = copy.deepcopy(model_im)
-    best_epoch = -1
+    best_epoch = 0
     model_ae.eval()
 
     for epoch in xrange(1, epochs+1):
@@ -332,8 +345,8 @@ def train_model_im_network(model_ae, model_im, train_dataloader, val_dataloader,
     time_elapsed = time.time() - init_time
     log_print("BEST EPOCH: %i/%i - Loss: %f" % (best_epoch, epochs, best_loss))
     log_print("Training completed in %sm %ss" % (time_elapsed // 60, time_elapsed % 60))
+    del model_ae, model_im
     return best_model
-    
 
 def train_model_joint(model_ae, model_im, train_dataloader, val_dataloader, loss_ae_f, loss_im_f, optimizer, explorer, epochs):
 
@@ -342,39 +355,45 @@ def train_model_joint(model_ae, model_im, train_dataloader, val_dataloader, loss
     best_loss = float('inf')
     best_model_ae = copy.deepcopy(model_ae)
     best_model_im = copy.deepcopy(model_im)
-    best_epoch = -1
+    best_epoch = 0
     lambda_ae = 1.0
 
     # Auto-calc scaling lambda
-    model_ae.eval()
-    model_im.eval()
-    loss_ae = 0.0
-    loss_im = 0.0
-    for data in train_dataloader:
-        # Wrap in pytorch autograd vars
-        ims, voxels = data['im'], data['voxel']
-        if config.GPU and torch.cuda.is_available():
-            ims = ims.cuda()
-            voxels = voxels.cuda()
-        ims = Variable(ims).float()
-        voxels = Variable(voxels).float()
+    if epochs > 0:
+        model_ae.eval()
+        model_im.eval()
+        loss_ae = 0.0
+        loss_im = 0.0
+        batches_sample = 100
+        batch_count = 0
+        for data in train_dataloader:
+            if batch_count == batches_sample:
+                break
 
-        # Forward pass
-        optimizer.zero_grad()
-        im_embed = model_im(ims)
-        voxel_embed = model_ae.module._encode(voxels)
-        out_voxels = model_ae.module._decode(voxel_embed)
+            # Wrap in pytorch autograd vars
+            ims, voxels = data['im'], data['voxel']
+            if config.GPU and torch.cuda.is_available():
+                ims = ims.cuda()
+                voxels = voxels.cuda()
+            ims = Variable(ims).float()
+            voxels = Variable(voxels).float()
 
-        # Calc loss
-        loss_ae += loss_ae_f(out_voxels, voxels)
-        loss_im += torch.sum((im_embed - voxel_embed)**2) / im_embed.data.nelement()
+            # Forward pass
+            optimizer.zero_grad()
+            im_embed = model_im(ims)
+            voxel_embed = model_ae.module._encode(voxels)
+            out_voxels = model_ae.module._decode(voxel_embed)
 
-    lambda_ae = float(loss_im) / float(loss_ae)
-    print loss_im, loss_ae, lambda_ae
-    loss_im = loss_ae = 0.0
-    model_ae.train()
-    model_im.train()
-    log_print("\t Calculated lambda AE init: %f" % lambda_ae)
+            # Calc loss
+            loss_ae += loss_ae_f(out_voxels, voxels).data[0]
+            loss_im += (torch.sum((im_embed - voxel_embed)**2) / im_embed.data.nelement()).data[0]
+            batch_count += 1
+
+        lambda_ae = float(loss_im) / float(loss_ae)
+        del loss_ae, loss_im
+        model_ae.train()
+        model_im.train()
+        log_print("\t Calculated lambda AE init: %f" % lambda_ae)
 
     for epoch in xrange(1, epochs+1):
         log_print("Epoch %i/%i" % (epoch, epochs))
@@ -490,6 +509,7 @@ def train_model_joint(model_ae, model_im, train_dataloader, val_dataloader, loss
     time_elapsed = time.time() - init_time
     log_print("BEST EPOCH: %i/%i - Loss: %f" % (best_epoch, epochs, best_loss))
     log_print("Training completed in %sm %ss" % (time_elapsed // 60, time_elapsed % 60))
+    del model_ae, model_im
     return (best_model_ae, best_model_im)
 
 #######################
@@ -678,6 +698,91 @@ def train_joint():
 
     return
 
+def train_view():
+
+    # Create datasets
+    log_print("Loading training and val data...")
+    train_dataloader = \
+        create_view_consistency_dataloader(
+            "train",
+            config.VIEW_SRC_DATA_BASE_DIR,
+            config.VIEW_TARGET_DATA_BASE_DIR,
+            config.BATCH_SIZE,
+            subset_size_=config.VIEW_SUBSET_SIZE_TRAIN)
+    val_dataloader = \
+        create_view_consistency_dataloader(
+            "val",
+            config.VIEW_SRC_DATA_BASE_DIR,
+            config.VIEW_TARGET_DATA_BASE_DIR,
+            config.BATCH_SIZE,
+            subset_size_=config.VIEW_SUBSET_SIZE_VAL)
+
+    # Initialize network weights
+    log_print("Creating image network and 3d-autoencoder models...")
+    model_ae = create_model_3d_autoencoder(config.VOXEL_RES, config.EMBED_SIZE)
+    model_im = create_model_image_network(config.EMBED_SIZE)
+    load_success_ae = try_load_weights(model_ae, config.VIEW_AE3D_LOAD_WEIGHTS)
+    load_success_im = try_load_weights(model_im, config.VIEW_IM_LOAD_WEIGHTS)
+    if config.GPU and torch.cuda.is_available():
+        log_print("\tEnabling GPU")
+        if config.MULTI_GPU and torch.cuda.device_count() > 1:
+            log_print("\tUsing multiple GPUs: %i" % torch.cuda.device_count())
+            model_ae = nn.DataParallel(model_ae)
+            model_im = nn.DataParallel(model_im)
+        model_ae = model_ae.cuda()
+        model_im = model_im.cuda()
+    else:
+        log_print("\t Ignoring GPU (CPU only)")
+    if not load_success_ae:
+        if not (try_load_weights(model_ae, config.VIEW_AE3D_LOAD_WEIGHTS)):
+            log_print("FAILED TO LOAD AE3D WEIGHTS")
+    if not load_success_im:
+        if not try_load_weights(model_im, config.VIEW_IM_LOAD_WEIGHTS):
+            log_print("FAILED TO LOAD IMAGE NETWORK WEIGHTS")
+
+    # Set up loss and optimizer
+    loss_ae = nn.BCELoss()
+    if config.GPU and torch.cuda.is_available():
+        loss_ae = loss_ae.cuda()
+    params = list(model_ae.parameters()) + \
+        list(filter(lambda p: p.requires_grad, model_im.parameters()))
+    optimizer = optim.SGD(
+        params,
+        lr=config.VIEW_LEARNING_RATE,
+        momentum=config.VIEW_MOMENTUM)
+    explorer = None
+
+    # Fetch Ys
+    log_print("Fetching source domain ground truths...")
+    train_src_dataloader = \
+        create_shapenet_voxel_dataloader(
+            'train', 
+            config.VIEW_SRC_DATA_BASE_DIR, 
+            config.BATCH_SIZE)
+    Y_list, Y_ind_map = optim_latent.fetch_Y(train_src_dataloader)
+    tmp = ImageVoxelDataset('train', config.VIEW_SRC_DATA_BASE_DIR)
+    Y_im_counts = tmp.im_counts.copy()
+    del tmp
+    log_print("\t%i source domain ground truth models" % len(Y_list))
+    
+    # Init latents
+    log_print("Initializing latent variables...")
+    train_target_dataloader = \
+        create_dataloader_from_dataset(train_dataloader.dataset.target_dataset, 32)
+    if config.VIEW_INIT_AVG is None:
+        log_print("\tCalculating d(*,*) avg")
+        avg = optim_latent.calc_avg(model_ae, model_im, train_target_dataloader, Y_list)
+    else:
+        avg = config.VIEW_INIT_AVG
+    log_print("\tMean d(*,*): %f" % avg)
+    M_list, M_ind_map = optim_latent.init_latents(
+        model_ae, model_im, train_target_dataloader, Y_list, Y_ind_map, Y_im_counts, avg*avg) #TODO
+    del train_src_dataloader, train_target_dataloader
+
+    #TODO: start training loop...
+
+    return
+    
 #####################
 #    END HELPERS    #
 #####################
@@ -685,8 +790,8 @@ def train_joint():
 def main():
 
     # Redirect output to log file
-    sys.stdout = open(config.OUT_LOG_FP, 'w')
-    sys.stderr = sys.stdout
+    #TODO sys.stdout = open(config.OUT_LOG_FP, 'w')
+    #TODO sys.stderr = sys.stdout
     log_print("Beginning script...")
 
     # Print beginning debug info
@@ -708,6 +813,10 @@ def main():
     log_print("***BEGINNING PART 3: joint training")
     train_joint()
     log_print("***FINISHED PART 3") 
+
+    log_print("***BEGINNING PART 4: view consistency adaptation")
+    train_view()
+    log_print("***FINISHED PART 4")
 
     # Finished
     log_print("Script DONE!")
