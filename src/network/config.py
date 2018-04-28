@@ -20,7 +20,7 @@ EMBED_SIZE = 64
 #####################################################################
 #   3D AUTOENCODER PARAMS
 AE_RUN_NAME = "ae3d"
-AE_INIT_WEIGHTS = "../../output/CHAIR/models/tl-default-2/ae3d.pt"
+AE_INIT_WEIGHTS = "../../output/CHAIR/models/tl-default-2/joint_ae3d.pt"
 AE_LEARNING_RATE = 1.0
 AE_EPOCHS = 0
 AE_WEIGHTS_CHECKPOINT = 20
@@ -31,7 +31,7 @@ AE_SUBSET_SIZE_VAL= None
 #####################################################################
 #   IMAGE NETWORK PARAMS
 IM_RUN_NAME = "im-network"
-IM_INIT_WEIGHTS = "../../output/CHAIR/models/tl-default-2/im-network.pt"
+IM_INIT_WEIGHTS = "../../output/CHAIR/models/tl-default-2/joint_im-network.pt"
 IM_AE3D_LOAD_WEIGHTS = "%s/models/%s/%s.pt" % (OUT_BASE_DIR, RUN_NAME, AE_RUN_NAME)
 IM_LEARNING_RATE = 1e-3
 IM_MOMENTUM=0.9
@@ -63,6 +63,8 @@ VIEW_AE3D_LOAD_WEIGHTS = "%s/models/%s/%s_ae3d.pt" % (OUT_BASE_DIR, RUN_NAME, JO
 VIEW_IM_LOAD_WEIGHTS = "%s/models/%s/%s_im.pt" % (OUT_BASE_DIR, RUN_NAME, JOINT_RUN_NAME)
 VIEW_LEARNING_RATE = 1e-5
 VIEW_MOMENTUM = 0.9
+VIEW_EPOCHS = 8
+VIEW_INNER_EPOCHS = 1
 VIEW_INIT_AVG = 0.18
 VIEW_SUBSET_SIZE_TRAIN = None
 VIEW_SUBSET_SIZE_VAL = None

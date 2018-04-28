@@ -512,6 +512,9 @@ def train_model_joint(model_ae, model_im, train_dataloader, val_dataloader, loss
     del model_ae, model_im
     return (best_model_ae, best_model_im)
 
+def train_model_view_step(model_ae, model_im):
+    #TODO
+    return model_ae, model_im 
 #######################
 #   TRAINING MAINS
 
@@ -776,10 +779,26 @@ def train_view():
         avg = config.VIEW_INIT_AVG
     log_print("\tMean d(*,*): %f" % avg)
     M_list, M_ind_map = optim_latent.init_latents(
-        model_ae, model_im, train_target_dataloader, Y_list, Y_ind_map, Y_im_counts, avg*avg) #TODO
+        model_ae, model_im, train_target_dataloader, Y_list, Y_ind_map, Y_im_counts, avg*avg)
     del train_src_dataloader, train_target_dataloader
 
-    #TODO: start training loop...
+    log_print("Starting optimization!!!")
+    for iter_ in xrange(1, config.VIEW_EPOCHS+1):
+
+        # Fix latent, optimize network
+        log_print("Epoch: %i/%i" % (iter_, config.VIEW_EPOCHS+1))
+        for e in xrange(config.VIEW_INNER_EPOCHS):
+            log_print("\tOptimizing network parameters G():")
+            model_ae, model_im = train_model_view_step(model_ae, model_im) #TODO
+
+        # Fix network, optimize latent
+        log_print("\tOptimizing latent configs M:")
+        M_list = optim_latent.update_latents(M_list) #TODO
+
+        # Checkpoint weights
+        log_print("\tSaving iter %i weights" % iter_)
+        save_model_weights(model_ae, "%s_ae3d_%i" % (config.VIEW_RUN_NAME, iter_))
+        save_model_weights(model_im, "%s_im_%i" % (config.VIEW_RUN_NAME, iter_))
 
     return
     

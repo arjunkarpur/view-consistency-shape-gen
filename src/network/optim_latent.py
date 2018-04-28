@@ -118,6 +118,7 @@ def init_latents(model_ae, model_im, train_target_dataloader, Y_list, Y_ind_map,
     M_rhos = [-float('inf') for i in xrange(len(M_im_counts))]
     M_list = [0 for i in xrange(len(M_im_counts))]
     M_ind_map = {}
+    return M_list, M_ind_map
 
     for data in train_target_dataloader:
 
@@ -146,3 +147,7 @@ def init_latents(model_ae, model_im, train_target_dataloader, Y_list, Y_ind_map,
     model_ae.train()
     model_im.train()
     return M_list, M_ind_map
+
+def update_latents(M_list):
+    #TODO
+    return M_list
