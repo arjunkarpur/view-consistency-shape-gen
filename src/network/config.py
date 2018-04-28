@@ -1,9 +1,9 @@
 
 # Filepaths
-RUN_NAME = "testviewconsistency"
-RUN_DESCRIPTION = "testingviewconsistency"
+RUN_NAME = "viewconsistencytest"
+RUN_DESCRIPTION = "viewconsistencytest"
 PROJ_BASE_DIR = "../.."
-OBJECT_CLASS = "CHAIR"
+OBJECT_CLASS = "RedwoodRGB_Chair"
 DATA_BASE_DIR = "%s/data/%s" % (PROJ_BASE_DIR, OBJECT_CLASS)
 OUT_BASE_DIR = "%s/output/%s" % (PROJ_BASE_DIR, OBJECT_CLASS)
 OUT_WEIGHTS_DIR = "%s/models/%s" % (OUT_BASE_DIR, RUN_NAME)
@@ -20,10 +20,10 @@ EMBED_SIZE = 64
 #####################################################################
 #   3D AUTOENCODER PARAMS
 AE_RUN_NAME = "ae3d"
-AE_INIT_WEIGHTS = "../../output/CHAIR/models/tl-default-2/joint_ae3d.pt"
-AE_LEARNING_RATE = 1.0
+AE_INIT_WEIGHTS = "../../output/CHAIR/models/tl-default-final/joint_ae3d.pt"
+AE_LEARNING_RATE = 1e-3
 AE_EPOCHS = 0
-AE_WEIGHTS_CHECKPOINT = 20
+AE_WEIGHTS_CHECKPOINT = 50
 AE_PRINT_INTERVAL = 20
 AE_SUBSET_SIZE_TRAIN = None
 AE_SUBSET_SIZE_VAL= None
@@ -31,13 +31,13 @@ AE_SUBSET_SIZE_VAL= None
 #####################################################################
 #   IMAGE NETWORK PARAMS
 IM_RUN_NAME = "im-network"
-IM_INIT_WEIGHTS = "../../output/CHAIR/models/tl-default-2/joint_im-network.pt"
+IM_INIT_WEIGHTS = "../../output/CHAIR/models/tl-default-final/joint_im.pt"
 IM_AE3D_LOAD_WEIGHTS = "%s/models/%s/%s.pt" % (OUT_BASE_DIR, RUN_NAME, AE_RUN_NAME)
-IM_LEARNING_RATE = 1e-3
-IM_MOMENTUM=0.9
+IM_LEARNING_RATE = 1e-4
+IM_MOMENTUM = 0.9
 IM_EPOCHS = 0
-IM_WEIGHTS_CHECKPOINT = 5
-IM_PRINT_INTERVAL = 200
+IM_WEIGHTS_CHECKPOINT = 20
+IM_PRINT_INTERVAL = 50
 IM_SUBSET_SIZE_TRAIN = None
 IM_SUBSET_SIZE_VAL= None
 
@@ -46,16 +46,17 @@ IM_SUBSET_SIZE_VAL= None
 JOINT_RUN_NAME = "joint"
 JOINT_AE3D_LOAD_WEIGHTS = "%s/models/%s/%s.pt" % (OUT_BASE_DIR, RUN_NAME, AE_RUN_NAME)
 JOINT_IM_LOAD_WEIGHTS = "%s/models/%s/%s.pt" % (OUT_BASE_DIR, RUN_NAME, IM_RUN_NAME)
-JOINT_LEARNING_RATE = 1e-5
+JOINT_LEARNING_RATE = 1e-7
 JOINT_MOMENTUM = 0.9
 JOINT_EPOCHS = 0
-JOINT_WEIGHTS_CHECKPOINT = 5
-JOINT_PRINT_INTERVAL = 200
+JOINT_WEIGHTS_CHECKPOINT = 20
+JOINT_PRINT_INTERVAL = 50
 JOINT_SUBSET_SIZE_TRAIN = None
 JOINT_SUBSET_SIZE_VAL= None
 
 ####################################################################
 #   VIEW CONSISTENCY PARAMS
+VIEW_INCLUDE = True
 VIEW_RUN_NAME = "view"
 VIEW_SRC_DATA_BASE_DIR = DATA_BASE_DIR
 VIEW_TARGET_DATA_BASE_DIR = "%s/data/RedwoodRGB_Chair" % PROJ_BASE_DIR
@@ -63,9 +64,11 @@ VIEW_AE3D_LOAD_WEIGHTS = "%s/models/%s/%s_ae3d.pt" % (OUT_BASE_DIR, RUN_NAME, JO
 VIEW_IM_LOAD_WEIGHTS = "%s/models/%s/%s_im.pt" % (OUT_BASE_DIR, RUN_NAME, JOINT_RUN_NAME)
 VIEW_LEARNING_RATE = 1e-5
 VIEW_MOMENTUM = 0.9
-VIEW_EPOCHS = 8
+VIEW_EPOCHS = 2
+VIEW_SRC_SAMPLE_MULTIPLIER = 1.0
 VIEW_INNER_EPOCHS = 1
-VIEW_INIT_AVG = 0.18
+VIEW_PRINT_INTERVAL = 25
+VIEW_INIT_AVG = 0.295183
 VIEW_SUBSET_SIZE_TRAIN = None
 VIEW_SUBSET_SIZE_VAL = None
 

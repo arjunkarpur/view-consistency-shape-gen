@@ -130,7 +130,7 @@ def test_model(model, test_dataloader, loss_f):
 
         # Calculate loss
         loss = loss_f(out_voxels.float(), voxels.float())
-        curr_loss += BATCH_SIZE * loss.data[0]
+        curr_loss += BATCH_SIZE * loss.item()
 
         # Calculate accuracy (IOU accuracy)
         for i in xrange(len(BIN_THRESHES)):

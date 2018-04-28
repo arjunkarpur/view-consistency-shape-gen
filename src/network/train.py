@@ -7,6 +7,7 @@ import torch
 import config
 import random
 import datetime
+import numpy as np
 import torch.nn as nn
 import torchvision as tv
 import torch.optim as optim
@@ -26,8 +27,8 @@ import optim_latent
 
 def log_print(string):
     print "[%s]\t %s" % (datetime.datetime.now(), string)
-    #TODO: sys.stdout.flush()
-    #TODO: os.fsync(sys.stdout.fileno())
+    sys.stdout.flush()
+    os.fsync(sys.stdout.fileno())
     return
 
 ###########################
@@ -65,7 +66,30 @@ def create_image_network_dataloader(dset_type_, data_base_dir_, batch_size_, sub
         data_base_dir=data_base_dir_)
     return create_dataloader_from_dataset(dataset_, batch_size_, subset_size_)
 
-def create_view_consistency_dataloader(dset_type_, src_data_base_dir_, target_data_base_dir_, batch_size_, subset_size_=None):
+def create_fusion_dataloader(dataset_, batch_size_, src_sample_mult=None):
+    
+    # If no subsamplig required, return normal dataloader
+    if src_sample_mult is None:
+        return create_dataloader_from_dataset(dataset_, batch_size_, subset_size_=None)
+
+    # Determine indices
+    indices_src = range(len(dataset_.src_dataset))
+    indices_target = [i+len(indices_src) for i in xrange(len(dataset_.target_dataset))]
+    num_src = int(min(src_sample_mult * len(indices_target), len(indices_src)))
+    indices_src = random.sample(indices_src, num_src)
+    indices_both = indices_src + indices_target
+
+    # Create dataloader
+    sampler_ = sampler.SubsetRandomSampler(indices_both)
+    dataloader = DataLoader(
+        dataset_,
+        sampler=sampler_,
+        batch_size=batch_size_,
+        shuffle=False,
+        num_workers=4)
+    return dataloader
+
+def create_view_consistency_dataloader(dset_type_, src_data_base_dir_, target_data_base_dir_, batch_size_, src_sample_mult=None):
     src_dataset = ImageVoxelDataset(
         dset_type=dset_type_,
         data_base_dir=src_data_base_dir_)
@@ -75,7 +99,7 @@ def create_view_consistency_dataloader(dset_type_, src_data_base_dir_, target_da
     dataset_ = FusionDataset(
         src_dataset,
         target_dataset)
-    return create_dataloader_from_dataset(dataset_, batch_size_, subset_size_)
+    return create_fusion_dataloader(dataset_, batch_size_, src_sample_mult)
     
 ######################
 #   MODELS
@@ -184,7 +208,7 @@ def train_model_ae3d(model, train_dataloader, val_dataloader, loss_f, optimizer,
 
                 # Calculate loss
                 loss = loss_f(out_voxels.float(), voxels.float())
-                curr_loss += voxels.size(0) * loss.data[0]
+                curr_loss += voxels.size(0) * loss.item()
 
                 # Backward pass (if train)
                 if phase == "train":
@@ -299,7 +323,7 @@ def train_model_im_network(model_ae, model_im, train_dataloader, val_dataloader,
                 im_embed = model_im(ims)
                 voxel_embed = model_ae.module._encode(voxels)
                 loss = loss_f(im_embed, voxel_embed)
-                curr_loss += voxels.size(0) * loss.data[0]
+                curr_loss += voxels.size(0) * loss.item()
 
                 # Backprop and cleanup
                 if phase == "train":
@@ -385,11 +409,11 @@ def train_model_joint(model_ae, model_im, train_dataloader, val_dataloader, loss
             out_voxels = model_ae.module._decode(voxel_embed)
 
             # Calc loss
-            loss_ae += loss_ae_f(out_voxels, voxels).data[0]
-            loss_im += (torch.sum((im_embed - voxel_embed)**2) / im_embed.data.nelement()).data[0]
+            loss_ae += loss_ae_f(out_voxels, voxels).item()
+            loss_im += (torch.sum((im_embed - voxel_embed)**2) / im_embed.data.nelement()).item()
             batch_count += 1
 
-        lambda_ae = float(loss_im) / float(loss_ae)
+        lambda_ae = (float(loss_im) / float(loss_ae)) * 0.5
         del loss_ae, loss_im
         model_ae.train()
         model_im.train()
@@ -444,8 +468,8 @@ def train_model_joint(model_ae, model_im, train_dataloader, val_dataloader, loss
                 loss_ae = lambda_ae * loss_ae_f(out_voxels, voxels)
                 loss_im = torch.sum((im_embed - voxel_embed)**2) / im_embed.data.nelement()
                 total_loss = loss_ae + loss_im
-                curr_loss_ae += voxels.size(0) * loss_ae.data[0]
-                curr_loss_im += voxels.size(0) * loss_im.data[0]
+                curr_loss_ae += voxels.size(0) * loss_ae.item()
+                curr_loss_im += voxels.size(0) * loss_im.item()
 
                 # Backprop and cleanup
                 if phase == "train":
@@ -512,9 +536,128 @@ def train_model_joint(model_ae, model_im, train_dataloader, val_dataloader, loss
     del model_ae, model_im
     return (best_model_ae, best_model_im)
 
-def train_model_view_step(model_ae, model_im):
-    #TODO
+def model_view_step(model_ae, model_im, M_list, M_ind_map, dataloader, lambda_ae, lambda_view, train=False, optimizer=None):
+
+    # Init metrics
+    init_time = time.time()
+    curr_sup_loss = curr_view_loss = 0.0
+    total_sup_loss = total_view_loss = 0.0
+    print_interval = config.VIEW_PRINT_INTERVAL
+    batch_count = 1
+    if dataloader.sampler is None:
+        num_images = len(dataloader.dataset)
+    else:
+        num_images = len(dataloader.sampler)
+
+    if train:
+        model_ae.train()
+        model_im.train()
+    else:
+        model_ae.val()
+        model_im.val()
+    loss_ae_f = nn.BCELoss().cuda()
+
+    epoch_loss_sup_ae = 0.0
+    epoch_loss_sup_im = 0.0
+    epoch_loss_view = 0.0
+
+    # Train the epoch
+    log_print("\t\t[%s] - %i ims, %i batches" % ("TRAIN" if train else "VAL", num_images, num_images/config.BATCH_SIZE))
+    for data in dataloader:
+
+        # Gather data
+        ims, voxels, im_names, domains = \
+            data['im'], data['voxel'], data['im_name'], np.array(data['domain'])
+        if config.GPU and torch.cuda.is_available():
+            ims = ims.cuda()
+            voxels = voxels.cuda()
+        ims = Variable(ims).float()
+        voxels = Variable(voxels).float()
+
+        # Forward pass
+        if train and (optimizer is not None):
+            optimizer.zero_grad()
+        im_embed = model_im(ims)
+        voxel_embed = model_ae.module._encode(voxels)
+        out_voxels_ae = model_ae.module._decode(voxel_embed)
+        out_voxels_im = model_ae.module._decode(im_embed)
+
+        # Compute masks for src and target data
+        src_inds = np.where(domains == 'src')[0]
+        target_inds = np.where(domains == 'target')[0]
+
+        # Source data only
+        im_embed_masked_src = im_embed.clone()
+        voxel_embed_masked_src = voxel_embed.clone()
+        out_voxels_ae_masked_src = out_voxels_ae.clone()
+        voxels_masked_src = voxels.clone()
+        im_embed_masked_src[target_inds] = 0
+        voxel_embed_masked_src[target_inds] = 0
+        out_voxels_ae_masked_src[target_inds] = 0
+        voxels_masked_src[target_inds] = 0
+
+        # Target data only
+        im_embed_masked_target = im_embed.clone()
+        voxel_embed_masked_target = voxel_embed.clone()
+        out_voxels_im_masked_target = out_voxels_im.clone()
+        voxels_masked_target = voxels.clone()
+        im_embed_masked_target[src_inds] = 0
+        voxel_embed_masked_target[src_inds] = 0
+        out_voxels_im_masked_target[src_inds] = 0
+        voxels_masked_target[src_inds] = 0
+
+        # Compute supervised loss (src domain)
+        loss_sup_ae = \
+            (float(im_embed.size(0))*(loss_ae_f(out_voxels_ae_masked_src, voxels_masked_src)))/float(len(src_inds))
+        loss_sup_im = \
+            torch.sum((im_embed_masked_src-voxel_embed_masked_src)**2) / float(len(src_inds))
+        loss_sup = (lambda_ae * loss_sup_ae) + loss_sup_im
+
+        # Compute view consistency loss (target domain)
+        M_masked_target = \
+            Variable(torch.zeros(out_voxels_im_masked_target.size()).cuda(), requires_grad=False)
+        for target_ind in target_inds:
+            target_id = str(im_names[target_ind]).split("_")[1]
+            M_masked_target[target_ind] = M_list[M_ind_map[target_id]]
+        loss_view = \
+            torch.sum((out_voxels_im_masked_target-M_masked_target)**2) / float(len(target_inds))
+
+        # Backprop and cleanup
+        curr_loss_sup_ae = (lambda_ae * loss_sup_ae).data.item()
+        curr_loss_sup_im = loss_sup_im.data.item()
+        curr_loss_view = (lambda_view * loss_view).data.item()
+        total_loss = loss_sup + (lambda_view * loss_view)
+        if train and (optimizer is not None):
+            total_loss.backward()
+            optimizer.step()
+
+        # Output
+        #TODO
+        if batch_count % print_interval == 0:
+            epoch_loss_sup_ae += curr_loss_sup_ae 
+            epoch_loss_sup_im += curr_loss_sup_im 
+            epoch_loss_view += curr_loss_view
+            if train:
+                one = float(curr_loss_sup_ae) / float(print_interval * config.BATCH_SIZE)
+                two = float(curr_loss_sup_im) / float(print_interval * config.BATCH_SIZE)
+                three = float(curr_loss_view) / float(print_interval * config.BATCH_SIZE)
+                total = one + two + three
+                log_print("\t\tBatches %i-%i -\tAvg Total: %f, Avg Sup AE: %f, Avg Sup Im: %f, Avg View: %f" % (batch_count-print_interval+1, batch_count, total, one, two, three))
+            curr_loss_sup_ae = curr_loss_sup_im = curr_loss_view = 0
+        batch_count += 1
+
+    # Report epoch results
+    one = float(epoch_loss_sup_ae + curr_loss_sup_ae) / float(num_images)
+    two = float(epoch_loss_sup_im + curr_loss_sup_im) / float(num_images)
+    three = float(epoch_loss_view + curr_loss_view) / float(num_images)
+    total = one + two + three
+    log_print("\t\tEPOCH RESULTS - Avg Total: %f, Avg Sup AE: %f, Avg Sup Im: %f, Avg View: %f" % (total, one, two, three))
+
+    # Return
+    model_ae.train()
+    model_im.train()
     return model_ae, model_im 
+
 #######################
 #   TRAINING MAINS
 
@@ -704,21 +847,13 @@ def train_joint():
 def train_view():
 
     # Create datasets
-    log_print("Loading training and val data...")
     train_dataloader = \
         create_view_consistency_dataloader(
             "train",
             config.VIEW_SRC_DATA_BASE_DIR,
             config.VIEW_TARGET_DATA_BASE_DIR,
             config.BATCH_SIZE,
-            subset_size_=config.VIEW_SUBSET_SIZE_TRAIN)
-    val_dataloader = \
-        create_view_consistency_dataloader(
-            "val",
-            config.VIEW_SRC_DATA_BASE_DIR,
-            config.VIEW_TARGET_DATA_BASE_DIR,
-            config.BATCH_SIZE,
-            subset_size_=config.VIEW_SUBSET_SIZE_VAL)
+            src_sample_mult=config.VIEW_SRC_SAMPLE_MULTIPLIER)
 
     # Initialize network weights
     log_print("Creating image network and 3d-autoencoder models...")
@@ -754,6 +889,8 @@ def train_view():
         lr=config.VIEW_LEARNING_RATE,
         momentum=config.VIEW_MOMENTUM)
     explorer = None
+    lambda_ae = 1.0 #TODO
+    lambda_view = 1.0 #TODO
 
     # Fetch Ys
     log_print("Fetching source domain ground truths...")
@@ -784,19 +921,26 @@ def train_view():
 
     log_print("Starting optimization!!!")
     for iter_ in xrange(1, config.VIEW_EPOCHS+1):
+        log_print("\tEpoch: %i/%i" % (iter_, config.VIEW_EPOCHS+1))
+
+        # Recreate dataloader (new subset of src data)
+        log_print("\t  Refreshing src training data")
+        train_dataloader = \
+            create_fusion_dataloader(
+                train_dataloader.dataset, config.BATCH_SIZE, config.VIEW_SRC_SAMPLE_MULTIPLIER)
 
         # Fix latent, optimize network
-        log_print("Epoch: %i/%i" % (iter_, config.VIEW_EPOCHS+1))
         for e in xrange(config.VIEW_INNER_EPOCHS):
-            log_print("\tOptimizing network parameters G():")
-            model_ae, model_im = train_model_view_step(model_ae, model_im) #TODO
+            log_print("\t  Optimizing network parameters G():")
+            model_ae, model_im = model_view_step(
+                model_ae, model_im, M_list, M_ind_map, train_dataloader, lambda_ae, lambda_view, train=True, optimizer=optimizer)
 
         # Fix network, optimize latent
-        log_print("\tOptimizing latent configs M:")
+        log_print("\t  Optimizing latent configs M:")
         M_list = optim_latent.update_latents(M_list) #TODO
 
         # Checkpoint weights
-        log_print("\tSaving iter %i weights" % iter_)
+        log_print("\t  Saving epoch %i weights" % iter_)
         save_model_weights(model_ae, "%s_ae3d_%i" % (config.VIEW_RUN_NAME, iter_))
         save_model_weights(model_im, "%s_im_%i" % (config.VIEW_RUN_NAME, iter_))
 
@@ -809,8 +953,8 @@ def train_view():
 def main():
 
     # Redirect output to log file
-    #TODO sys.stdout = open(config.OUT_LOG_FP, 'w')
-    #TODO sys.stderr = sys.stdout
+    sys.stdout = open(config.OUT_LOG_FP, 'w')
+    sys.stderr = sys.stdout
     log_print("Beginning script...")
 
     # Print beginning debug info
@@ -833,9 +977,10 @@ def main():
     train_joint()
     log_print("***FINISHED PART 3") 
 
-    log_print("***BEGINNING PART 4: view consistency adaptation")
-    train_view()
-    log_print("***FINISHED PART 4")
+    if config.VIEW_INCLUDE:
+        log_print("***BEGINNING PART 4: view consistency adaptation")
+        train_view()
+        log_print("***FINISHED PART 4")
 
     # Finished
     log_print("Script DONE!")

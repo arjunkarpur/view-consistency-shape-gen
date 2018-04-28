@@ -20,9 +20,9 @@ from models import AE_3D
 
 GPU = True
 MULTI_GPU = True
-MODELS_OBJ_CLASS = "RedwoodRGB_Chair" #use ae,im network models trained on this dataset
+MODELS_OBJ_CLASS = "CHAIR" #use ae,im network models trained on this dataset
 OBJ_CLASS = "RedwoodRGB_Chair" #test on this dataset
-NAME = "real_data_test"
+NAME = "tl-default-final"
 DATA_BASE_DIR = "../../data/%s" % OBJ_CLASS
 IN_AE_WEIGHTS_FP = "../../output/%s/models/%s/joint_ae3d.pt" % (MODELS_OBJ_CLASS, NAME)
 IN_IM_WEIGHTS_FP = "../../output/%s/models/%s/joint_im.pt" % (MODELS_OBJ_CLASS, NAME)
@@ -150,7 +150,7 @@ def test_model(model_ae, model_im, test_dataloader, loss_f):
 
         # Calculate loss
         loss = loss_f(out_voxels.float(), voxels.float())
-        curr_loss += BATCH_SIZE * loss.data[0]
+        curr_loss += BATCH_SIZE * loss.item()
 
         # Calculate accuracy (IOU accuracy)
         for i in xrange(len(BIN_THRESHES)):

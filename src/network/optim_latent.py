@@ -51,7 +51,7 @@ def calc_avg(model_ae, model_im, train_target_dataloader, Y_list):
 
     # Calculate mean
     mean = RunningAverage()
-    batch_sample = 10 #TODO: set to proper sample number
+    batch_sample = 999999999999 #TODO: set to proper sample number
     batch_count = 0
     for data in train_target_dataloader:
         if batch_count == batch_sample:
@@ -118,7 +118,6 @@ def init_latents(model_ae, model_im, train_target_dataloader, Y_list, Y_ind_map,
     M_rhos = [-float('inf') for i in xrange(len(M_im_counts))]
     M_list = [0 for i in xrange(len(M_im_counts))]
     M_ind_map = {}
-    return M_list, M_ind_map
 
     for data in train_target_dataloader:
 
