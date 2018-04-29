@@ -323,7 +323,10 @@ def train_model_im_network(model_ae, model_im, train_dataloader, val_dataloader,
                 # Forward passes + calc loss
                 optimizer.zero_grad()
                 im_embed = model_im(ims)
-                voxel_embed = model_ae.module._encode(voxels)
+                try:
+                    voxel_embed = model_ae.module._encode(voxels)
+                except:
+                    voxel_embed = model_ae._encode(voxels)
                 loss = loss_f(im_embed, voxel_embed)
                 curr_loss += voxels.size(0) * loss.item()
 
@@ -407,8 +410,14 @@ def train_model_joint(model_ae, model_im, train_dataloader, val_dataloader, loss
             # Forward pass
             optimizer.zero_grad()
             im_embed = model_im(ims)
-            voxel_embed = model_ae.module._encode(voxels)
-            out_voxels = model_ae.module._decode(voxel_embed)
+            try:
+                voxel_embed = model_ae.module._encode(voxels)
+            except:
+                voxel_embed = model_ae._encode(voxels)
+            try:
+                out_voxels = model_ae.module._decode(voxel_embed)
+            except:
+                out_voxels = model_ae._decode(voxel_embed)
 
             # Calc loss
             loss_ae += loss_ae_f(out_voxels, voxels).item()
@@ -463,8 +472,14 @@ def train_model_joint(model_ae, model_im, train_dataloader, val_dataloader, loss
                 # Forward pass
                 optimizer.zero_grad()
                 im_embed = model_im(ims)
-                voxel_embed = model_ae.module._encode(voxels)
-                out_voxels = model_ae.module._decode(voxel_embed)
+                try:
+                    voxel_embed = model_ae.module._encode(voxels)
+                except:
+                    voxel_embed = model_ae._encode(voxels)
+                try:
+                    out_voxels = model_ae.module._decode(voxel_embed)
+                except:
+                    out_voxels = model_ae._decode(voxel_embed)
 
                 # Calc loss
                 loss_ae = lambda_ae * loss_ae_f(out_voxels, voxels)
@@ -580,9 +595,18 @@ def model_view_step(model_ae, model_im, M_list, M_ind_map, dataloader, lambda_ae
         if train and (optimizer is not None):
             optimizer.zero_grad()
         im_embed = model_im(ims)
-        voxel_embed = model_ae.module._encode(voxels)
-        out_voxels_ae = model_ae.module._decode(voxel_embed)
-        out_voxels_im = model_ae.module._decode(im_embed)
+        try:
+            voxel_embed = model_ae.module._encode(voxels)
+        except:
+            voxel_embed = model_ae._encode(voxels)
+        try:
+            out_voxels_ae = model_ae.module._decode(voxel_embed)
+        except:
+            out_voxels_ae = model_ae._decode(voxel_embed)
+        try:
+            out_voxels_im = model_ae.module._decode(im_embed)
+        except:
+            out_voxels_im = model_ae._decode(im_embed)
 
         # Compute masks for src and target data
         src_inds = np.where(domains == 'src')[0]
@@ -936,7 +960,7 @@ def train_view():
 
         # Fix latent, optimize network
         for e in xrange(config.VIEW_INNER_EPOCHS):
-            log_print("\t  Optimizing network parameters G():")
+            log_print("\t  Optimizing network parameters G() - %i/%i:" % (e+1, config.VIEW_INNER_EPOCHS))
             model_ae, model_im = model_view_step(
                 model_ae, model_im, M_list, M_ind_map, train_dataloader, lambda_ae, lambda_view, train=True, optimizer=optimizer)
 
