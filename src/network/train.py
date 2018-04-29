@@ -27,6 +27,8 @@ import optim_latent
 
 def log_print(string):
     print "[%s]\t %s" % (datetime.datetime.now(), string)
+    #FIXME sys.stdout.flush()
+    #FIXME os.fsync(sys.stdout.fileno())
     sys.stdout.flush()
     os.fsync(sys.stdout.fileno())
     return
@@ -890,7 +892,8 @@ def train_view():
         momentum=config.VIEW_MOMENTUM)
     explorer = None
     lambda_ae = 1.0 #TODO
-    lambda_view = 1.0 #TODO
+    lambda_view = config.VIEW_LAMBDA_VIEW
+    lambda_align = config.VIEW_LAMBDA_ALIGN
 
     # Fetch Ys
     log_print("Fetching source domain ground truths...")
@@ -927,7 +930,9 @@ def train_view():
         log_print("\t  Refreshing src training data")
         train_dataloader = \
             create_fusion_dataloader(
-                train_dataloader.dataset, config.BATCH_SIZE, config.VIEW_SRC_SAMPLE_MULTIPLIER)
+                train_dataloader.dataset, 
+                config.BATCH_SIZE, 
+                config.VIEW_SRC_SAMPLE_MULTIPLIER)
 
         # Fix latent, optimize network
         for e in xrange(config.VIEW_INNER_EPOCHS):
@@ -935,9 +940,18 @@ def train_view():
             model_ae, model_im = model_view_step(
                 model_ae, model_im, M_list, M_ind_map, train_dataloader, lambda_ae, lambda_view, train=True, optimizer=optimizer)
 
+        # Create target dataset dataloader
+        target_dataloader = \
+            create_dataloader_from_dataset(
+                train_dataloader.dataset.target_dataset,
+                config.BATCH_SIZE)
+        M_im_counts = target_dataloader.dataset.im_counts
+
         # Fix network, optimize latent
         log_print("\t  Optimizing latent configs M:")
-        M_list = optim_latent.update_latents(M_list) #TODO
+        M_list = optim_latent.update_latents(
+            model_ae, model_im, target_dataloader, M_list, M_ind_map, M_im_counts, 
+            Y_list, Y_ind_map, Y_im_counts, lambda_view, lambda_align)
 
         # Checkpoint weights
         log_print("\t  Saving epoch %i weights" % iter_)
@@ -953,6 +967,8 @@ def train_view():
 def main():
 
     # Redirect output to log file
+    #FIXME sys.stdout = open(config.OUT_LOG_FP, 'w')
+    #FIXME sys.stderr = sys.stdout
     sys.stdout = open(config.OUT_LOG_FP, 'w')
     sys.stderr = sys.stdout
     log_print("Beginning script...")

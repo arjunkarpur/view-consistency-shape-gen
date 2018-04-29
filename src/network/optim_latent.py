@@ -147,6 +147,65 @@ def init_latents(model_ae, model_im, train_target_dataloader, Y_list, Y_ind_map,
     model_im.train()
     return M_list, M_ind_map
 
-def update_latents(M_list):
-    #TODO
-    return M_list
+def optimal_label(X, Z_list, Z_ind_map):
+    best_id = None
+    best_dist = float('inf')
+    for id_ in Z_ind_map:
+        Z = Z_list[Z_ind_map[id_]]
+        dist = (torch.sum((X-Z)**2) / M.data.nelement())
+        if dist < best_dist:
+            best_id = id_
+            best_dist = dist
+    return best_id
+
+def update_latents(model_ae, model_im, target_dataloader, M_list, M_ind_map, M_im_counts, Y_list, Y_ind_map, Y_im_counts, lambda_view, lambda_align):
+    
+    # Optimize each independently, given M
+    M_list_opt = [None for i in xrange(len(M_list))]
+    N = len(M_list)
+    src_cardinality = 0
+    for id_ in Y_im_counts:
+        src_cardinality += Y_im_counts[id_]
+
+    # Preprocess images in dataloader, assign to 
+    output_sum = [None for i in xrange(len(M_list))]
+    for data in target_dataloader:
+        ims, im_names = data['ims'], data['im_names']
+        ims = torch.autograd.Variable(ims.cuda(), requires_grad=False)
+        im_embed = model_im(ims)
+        out_voxels = model_ae.module._encode(im_embed)
+
+        for i in xrange(len(im_names)):
+            im_name = im_names[i]
+            id_ = im_name.split("_")[1]
+            index = M_ind_map[id_]
+            if output_sums[index] == None:
+                output_sums[index] = torch.zeros(out_voxels[0].size())
+            output_sums[index] += out_voxels[i]
+
+    # Update each latent var independently
+    for id_ in M_ind_map:
+
+        # Init
+        index = M_ind_map[id_]
+        M = M_list[index]
+        running_sum = torch.zeros(M.size())
+        num = 0
+
+        # Align term one (closest image/label given M_i)
+        closest_Y_id = optimal_label(M, Y_list, Y_ind_map)
+        running_sum += lambda_align * Y_list[Y_ind_map[closest_Y_id]]
+        num += (Y_im_counts[closest_Y_id])
+
+        # Align term two (closest M_i given image/label)
+        running_sum += lambda_align * Y_list[Y_ind_map[closest_Y_id]]
+        num += 1
+
+        # View term
+        running_sum += lambda_view * output_sums[index]
+        num += M_im_counts[id_]
+
+        # Save
+        M_opt = running_sum / float(num)
+        M_list_opt[index] = M_opt.clone()
+    return M_list_opt

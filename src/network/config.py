@@ -1,7 +1,7 @@
 
 # Filepaths
-RUN_NAME = "viewconsistencytest"
-RUN_DESCRIPTION = "viewconsistencytest"
+RUN_NAME = "tl-supervised-2"
+RUN_DESCRIPTION = "tl supervised 2. finetune on top of prev"
 PROJ_BASE_DIR = "../.."
 OBJECT_CLASS = "RedwoodRGB_Chair"
 DATA_BASE_DIR = "%s/data/%s" % (PROJ_BASE_DIR, OBJECT_CLASS)
@@ -20,7 +20,7 @@ EMBED_SIZE = 64
 #####################################################################
 #   3D AUTOENCODER PARAMS
 AE_RUN_NAME = "ae3d"
-AE_INIT_WEIGHTS = "../../output/CHAIR/models/tl-default-final/joint_ae3d.pt"
+AE_INIT_WEIGHTS = "../../output/RedwoodRGB_Chair/models/tl-supervised-1/joint_ae3d.pt"
 AE_LEARNING_RATE = 1e-3
 AE_EPOCHS = 0
 AE_WEIGHTS_CHECKPOINT = 50
@@ -31,7 +31,7 @@ AE_SUBSET_SIZE_VAL= None
 #####################################################################
 #   IMAGE NETWORK PARAMS
 IM_RUN_NAME = "im-network"
-IM_INIT_WEIGHTS = "../../output/CHAIR/models/tl-default-final/joint_im.pt"
+IM_INIT_WEIGHTS = "../../output/RedwoodRGB_Chair/models/tl-supervised-1/joint_im.pt"
 IM_AE3D_LOAD_WEIGHTS = "%s/models/%s/%s.pt" % (OUT_BASE_DIR, RUN_NAME, AE_RUN_NAME)
 IM_LEARNING_RATE = 1e-4
 IM_MOMENTUM = 0.9
@@ -46,9 +46,9 @@ IM_SUBSET_SIZE_VAL= None
 JOINT_RUN_NAME = "joint"
 JOINT_AE3D_LOAD_WEIGHTS = "%s/models/%s/%s.pt" % (OUT_BASE_DIR, RUN_NAME, AE_RUN_NAME)
 JOINT_IM_LOAD_WEIGHTS = "%s/models/%s/%s.pt" % (OUT_BASE_DIR, RUN_NAME, IM_RUN_NAME)
-JOINT_LEARNING_RATE = 1e-7
+JOINT_LEARNING_RATE = 1e-6
 JOINT_MOMENTUM = 0.9
-JOINT_EPOCHS = 0
+JOINT_EPOCHS = 100
 JOINT_WEIGHTS_CHECKPOINT = 20
 JOINT_PRINT_INTERVAL = 50
 JOINT_SUBSET_SIZE_TRAIN = None
@@ -56,7 +56,7 @@ JOINT_SUBSET_SIZE_VAL= None
 
 ####################################################################
 #   VIEW CONSISTENCY PARAMS
-VIEW_INCLUDE = True
+VIEW_INCLUDE = False 
 VIEW_RUN_NAME = "view"
 VIEW_SRC_DATA_BASE_DIR = DATA_BASE_DIR
 VIEW_TARGET_DATA_BASE_DIR = "%s/data/RedwoodRGB_Chair" % PROJ_BASE_DIR
@@ -65,10 +65,12 @@ VIEW_IM_LOAD_WEIGHTS = "%s/models/%s/%s_im.pt" % (OUT_BASE_DIR, RUN_NAME, JOINT_
 VIEW_LEARNING_RATE = 1e-5
 VIEW_MOMENTUM = 0.9
 VIEW_EPOCHS = 2
+VIEW_INNER_EPOCHS = 0
 VIEW_SRC_SAMPLE_MULTIPLIER = 1.0
-VIEW_INNER_EPOCHS = 1
 VIEW_PRINT_INTERVAL = 25
 VIEW_INIT_AVG = 0.295183
+VIEW_LAMBDA_VIEW = 1.0
+VIEW_LAMBDA_ALIGN = 0.2
 VIEW_SUBSET_SIZE_TRAIN = None
 VIEW_SUBSET_SIZE_VAL = None
 
