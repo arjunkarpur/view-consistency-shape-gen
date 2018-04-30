@@ -12,6 +12,7 @@ import torch.nn as nn
 import torchvision as tv
 import torch.optim as optim
 import torch.backends.cudnn as cudnn
+from collections import OrderedDict
 from torch.autograd import Variable
 from torch.optim import lr_scheduler
 from torch.utils.data import DataLoader, sampler
@@ -27,10 +28,9 @@ import optim_latent
 
 def log_print(string):
     print "[%s]\t %s" % (datetime.datetime.now(), string)
-    #FIXME sys.stdout.flush()
-    #FIXME os.fsync(sys.stdout.fileno())
-    sys.stdout.flush()
-    os.fsync(sys.stdout.fileno())
+    if config.LOG_FILE:
+        sys.stdout.flush()
+        os.fsync(sys.stdout.fileno())
     return
 
 ###########################
@@ -135,12 +135,25 @@ def save_model_weights(model, name):
     fp = os.path.join(dir_, "%s.pt" % name)
     torch.save(model.state_dict(), fp)
 
-def try_load_weights(model, fp):
+def try_load_weights_manual(model, other_state_dict):
+    new_state_dict = OrderedDict()
+    for k,v in other_state_dict.items():
+        k = k[7:]
+        new_state_dict[k] = v
     try:
-        model.load_state_dict(torch.load(fp))
+        model.load_state_dict(new_state_dict)
         return True
     except:
         return False
+    return False
+
+def try_load_weights(model, fp):
+    other_state_dict = torch.load(fp)
+    try:
+        model.load_state_dict(other_state_dict)
+        return True
+    except:
+        return try_load_weights_manual(model, other_state_dict)
 
 ############################
 #   TRAINING HELPERS
@@ -557,8 +570,6 @@ def model_view_step(model_ae, model_im, M_list, M_ind_map, dataloader, lambda_ae
 
     # Init metrics
     init_time = time.time()
-    curr_sup_loss = curr_view_loss = 0.0
-    total_sup_loss = total_view_loss = 0.0
     print_interval = config.VIEW_PRINT_INTERVAL
     batch_count = 1
     if dataloader.sampler is None:
@@ -574,6 +585,14 @@ def model_view_step(model_ae, model_im, M_list, M_ind_map, dataloader, lambda_ae
         model_im.val()
     loss_ae_f = nn.BCELoss().cuda()
 
+
+    src_count = 0
+    target_count = 0
+    curr_loss_sup_ae = 0.0
+    curr_loss_sup_im = 0.0
+    curr_loss_view = 0.0
+    epoch_src_count = 0
+    epoch_target_count = 0
     epoch_loss_sup_ae = 0.0
     epoch_loss_sup_im = 0.0
     epoch_loss_view = 0.0
@@ -633,10 +652,12 @@ def model_view_step(model_ae, model_im, M_list, M_ind_map, dataloader, lambda_ae
         voxels_masked_target[src_inds] = 0
 
         # Compute supervised loss (src domain)
-        loss_sup_ae = \
-            (float(im_embed.size(0))*(loss_ae_f(out_voxels_ae_masked_src, voxels_masked_src)))/float(len(src_inds))
-        loss_sup_im = \
-            torch.sum((im_embed_masked_src-voxel_embed_masked_src)**2) / float(len(src_inds))
+        src_count += len(src_inds)
+        target_count += len(target_inds)
+        loss_sup_ae = loss_ae_f(out_voxels_ae_masked_src, voxels_masked_src)
+        loss_sup_ae = (loss_sup_ae*voxels_masked_src.size(0)) / float(len(src_inds))
+        loss_sup_im = torch.sum((im_embed_masked_src-voxel_embed_masked_src)**2) / im_embed_masked_src.data.nelement()
+        torch_sup_im = (loss_sup_im*voxel_embed_masked_src.size(0)) / float(len(src_inds))
         loss_sup = (lambda_ae * loss_sup_ae) + loss_sup_im
 
         # Compute view consistency loss (target domain)
@@ -646,36 +667,39 @@ def model_view_step(model_ae, model_im, M_list, M_ind_map, dataloader, lambda_ae
             target_id = str(im_names[target_ind]).split("_")[1]
             M_masked_target[target_ind] = M_list[M_ind_map[target_id]]
         loss_view = \
-            torch.sum((out_voxels_im_masked_target-M_masked_target)**2) / float(len(target_inds))
+            torch.sum((out_voxels_im_masked_target-M_masked_target)**2) / M_masked_target.data.nelement()
+        loss_view = (loss_view * M_masked_target.size(0)) / float(len(target_inds))
 
         # Backprop and cleanup
-        curr_loss_sup_ae = (lambda_ae * loss_sup_ae).data.item()
-        curr_loss_sup_im = loss_sup_im.data.item()
-        curr_loss_view = (lambda_view * loss_view).data.item()
-        total_loss = loss_sup + (lambda_view * loss_view)
+        curr_loss_sup_ae += len(src_inds) * (lambda_ae * loss_sup_ae).data.item()
+        curr_loss_sup_im += len(src_inds) * loss_sup_im.data.item()
+        curr_loss_view += len(target_inds) * (lambda_view * loss_view).data.item()
+        total_loss = (loss_sup + (lambda_view * loss_view))
         if train and (optimizer is not None):
             total_loss.backward()
             optimizer.step()
 
         # Output
-        #TODO
         if batch_count % print_interval == 0:
             epoch_loss_sup_ae += curr_loss_sup_ae 
             epoch_loss_sup_im += curr_loss_sup_im 
             epoch_loss_view += curr_loss_view
+            epoch_src_count += src_count
+            epoch_target_count += target_count
             if train:
-                one = float(curr_loss_sup_ae) / float(print_interval * config.BATCH_SIZE)
-                two = float(curr_loss_sup_im) / float(print_interval * config.BATCH_SIZE)
-                three = float(curr_loss_view) / float(print_interval * config.BATCH_SIZE)
+                one = float(curr_loss_sup_ae) / float(src_count)
+                two = float(curr_loss_sup_im) / float(src_count)
+                three = float(curr_loss_view) / float(target_count)
                 total = one + two + three
                 log_print("\t\tBatches %i-%i -\tAvg Total: %f, Avg Sup AE: %f, Avg Sup Im: %f, Avg View: %f" % (batch_count-print_interval+1, batch_count, total, one, two, three))
-            curr_loss_sup_ae = curr_loss_sup_im = curr_loss_view = 0
+            curr_loss_sup_ae = curr_loss_sup_im = curr_loss_view = 0.0
+            src_count = target_count = 0
         batch_count += 1
 
     # Report epoch results
-    one = float(epoch_loss_sup_ae + curr_loss_sup_ae) / float(num_images)
-    two = float(epoch_loss_sup_im + curr_loss_sup_im) / float(num_images)
-    three = float(epoch_loss_view + curr_loss_view) / float(num_images)
+    one = float(epoch_loss_sup_ae + curr_loss_sup_ae) / float(epoch_src_count)
+    two = float(epoch_loss_sup_im + curr_loss_sup_im) / float(epoch_src_count)
+    three = float(epoch_loss_view + curr_loss_view) / float(epoch_target_count)
     total = one + two + three
     log_print("\t\tEPOCH RESULTS - Avg Total: %f, Avg Sup AE: %f, Avg Sup Im: %f, Avg View: %f" % (total, one, two, three))
 
@@ -720,6 +744,7 @@ def train_autoencoder():
     if (config.AE_INIT_WEIGHTS is not None) and (load_success is False):
         if not try_load_weights(model, config.AE_INIT_WEIGHTS):
             log_print("FAILED TO LOAD PRE-TRAINED WEIGHTS. EXITING")
+            sys.exit(-1)
 
     # Set up loss and optimizer
     loss_f = nn.BCELoss()
@@ -774,10 +799,12 @@ def train_image_network():
         log_print("\t Ignoring GPU (CPU only)")
     if not load_success_ae:
         if not try_load_weights(model_ae, config.IM_AE3D_LOAD_WEIGHTS):
-            log_print("COULDN'T LOAD AUTOENCODER WEIGHTS")
+            log_print("FAILED TO LOAD AUTOENCODER WEIGHTS")
+            sys.exit(-1)
     if config.IM_INIT_WEIGHTS is not None and not load_success_im:
         if not try_load_weights(model_im, config.IM_INIT_WEIGHTS):
-            log_print("COULDN'T LOAD IMAGE NETWORK INIT WEIGHTS")
+            log_print("FAILED TO LOAD IMAGE NETWORK INIT WEIGHTS")
+            sys.exit(-1)
 
     # Set up loss and optimizer
     loss_f = nn.MSELoss()
@@ -840,9 +867,11 @@ def train_joint():
     if not load_success_ae:
         if not (try_load_weights(model_ae, config.JOINT_AE3D_LOAD_WEIGHTS)):
             log_print("FAILED TO LOAD AE3D WEIGHTS")
+            sys.exit(-1)
     if not load_success_im:
         if not try_load_weights(model_im, config.JOINT_IM_LOAD_WEIGHTS):
             log_print("FAILED TO LOAD IMAGE NETWORK WEIGHTS")
+            sys.exit(-1)
 
     # Set up loss and optimizer
     loss_ae = nn.BCELoss()
@@ -852,10 +881,15 @@ def train_joint():
         loss_im = loss_im.cuda()
     params = list(model_ae.parameters()) + \
         list(filter(lambda p: p.requires_grad, model_im.parameters()))
+    optimizer = optim.Adadelta(
+        params,
+        lr=config.IM_LEARNING_RATE)
+    """
     optimizer = optim.SGD(
         params,
         lr=config.JOINT_LEARNING_RATE,
         momentum=config.JOINT_MOMENTUM)
+    """
     explorer = None
 
     # Perform training
@@ -900,9 +934,11 @@ def train_view():
     if not load_success_ae:
         if not (try_load_weights(model_ae, config.VIEW_AE3D_LOAD_WEIGHTS)):
             log_print("FAILED TO LOAD AE3D WEIGHTS")
+            sys.exit(-1)
     if not load_success_im:
         if not try_load_weights(model_im, config.VIEW_IM_LOAD_WEIGHTS):
             log_print("FAILED TO LOAD IMAGE NETWORK WEIGHTS")
+            sys.exit(-1)
 
     # Set up loss and optimizer
     loss_ae = nn.BCELoss()
@@ -915,7 +951,7 @@ def train_view():
         lr=config.VIEW_LEARNING_RATE,
         momentum=config.VIEW_MOMENTUM)
     explorer = None
-    lambda_ae = 1.0 #TODO
+    lambda_ae = 12.0
     lambda_view = config.VIEW_LAMBDA_VIEW
     lambda_align = config.VIEW_LAMBDA_ALIGN
 
@@ -945,13 +981,15 @@ def train_view():
     M_list, M_ind_map = optim_latent.init_latents(
         model_ae, model_im, train_target_dataloader, Y_list, Y_ind_map, Y_im_counts, avg*avg)
     del train_src_dataloader, train_target_dataloader
+    if config.VIEW_VOXELIZE_THRESH is not None:
+        M_list = optim_latent.voxelize_latents(M_list, config.VIEW_VOXELIZE_THRESH)
 
     log_print("Starting optimization!!!")
     for iter_ in xrange(1, config.VIEW_EPOCHS+1):
-        log_print("\tEpoch: %i/%i" % (iter_, config.VIEW_EPOCHS+1))
+        log_print("\tEpoch: %i/%i" % (iter_, config.VIEW_EPOCHS))
 
         # Recreate dataloader (new subset of src data)
-        log_print("\t  [%i/%i] Refreshing src training data" % (iter_, config.VIEW_EPOCHS+1))
+        log_print("\t  [%i/%i] Refreshing src training data" % (iter_, config.VIEW_EPOCHS))
         train_dataloader = \
             create_fusion_dataloader(
                 train_dataloader.dataset, 
@@ -960,7 +998,7 @@ def train_view():
 
         # Fix latent, optimize network
         for e in xrange(config.VIEW_INNER_EPOCHS):
-            log_print("\t  [%i/%i] Optimizing network parameters G() - %i/%i:" % (iter_, config.VIEW_EPOCHS+1, e+1, config.VIEW_INNER_EPOCHS))
+            log_print("\t  [%i/%i] Optimizing network parameters G() - %i/%i:" % (iter_, config.VIEW_EPOCHS, e+1, config.VIEW_INNER_EPOCHS))
             model_ae, model_im = model_view_step(
                 model_ae, model_im, M_list, M_ind_map, train_dataloader, lambda_ae, lambda_view, train=True, optimizer=optimizer)
 
@@ -972,13 +1010,15 @@ def train_view():
         M_im_counts = target_dataloader.dataset.im_counts
 
         # Fix network, optimize latent
-        log_print("\t  [%i/%i] Optimizing latent configs M:" % (iter_, config.VIEW_EPOCHS+1)
+        log_print("\t  [%i/%i] Optimizing latent configs M:" % (iter_, config.VIEW_EPOCHS))
         M_list = optim_latent.update_latents(
             model_ae, model_im, target_dataloader, M_list, M_ind_map, M_im_counts, 
             Y_list, Y_ind_map, Y_im_counts, lambda_view, lambda_align)
+        if config.VIEW_VOXELIZE_THRESH is not None:
+            M_list = optim_latent.voxelize_latents(M_list, config.VIEW_VOXELIZE_THRESH)
 
         # Checkpoint weights
-        log_print("\t  [%i/%i] Saving epoch %i weights" % (iter_, iter_, config.VIEW_EPOCHS+1))
+        log_print("\t  [%i/%i] Saving epoch %i weights" % (iter_, iter_, config.VIEW_EPOCHS))
         save_model_weights(model_ae, "%s_ae3d_%i" % (config.VIEW_RUN_NAME, iter_))
         save_model_weights(model_im, "%s_im_%i" % (config.VIEW_RUN_NAME, iter_))
 
@@ -991,10 +1031,9 @@ def train_view():
 def main():
 
     # Redirect output to log file
-    #FIXME sys.stdout = open(config.OUT_LOG_FP, 'w')
-    #FIXME sys.stderr = sys.stdout
-    sys.stdout = open(config.OUT_LOG_FP, 'w')
-    sys.stderr = sys.stdout
+    if config.LOG_FILE:
+        sys.stdout = open(config.OUT_LOG_FP, 'w')
+        sys.stderr = sys.stdout
     log_print("Beginning script...")
 
     # Print beginning debug info

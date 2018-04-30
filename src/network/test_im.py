@@ -7,6 +7,7 @@ import time
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from collections import OrderedDict
 from torch.autograd import Variable
 from torch.optim import lr_scheduler
 from torch.utils.data import DataLoader
@@ -21,19 +22,19 @@ from models import AE_3D
 IOU_ONLY = False
 GPU = True
 MULTI_GPU = True
-MODELS_OBJ_CLASS = "CHAIR" #use ae,im network models trained on this dataset
+MODELS_OBJ_CLASS = "RedwoodRGB_Chair" #use ae,im network models trained on this dataset
 OBJ_CLASS = "RedwoodRGB_Chair" #test on this dataset
-NAME = "viewtest"
+NAME = "tl-supervised-jointonly2"
 DATA_BASE_DIR = "../../data/%s" % OBJ_CLASS
-IN_AE_WEIGHTS_FP = "../../output/%s/models/%s/view_ae3d_2.pt" % (MODELS_OBJ_CLASS, NAME)
-IN_IM_WEIGHTS_FP = "../../output/%s/models/%s/view_im_2.pt" % (MODELS_OBJ_CLASS, NAME)
+IN_AE_WEIGHTS_FP = "../../output/%s/models/%s/joint_ae3d.pt" % (MODELS_OBJ_CLASS, NAME)
+IN_IM_WEIGHTS_FP = "../../output/%s/models/%s/joint_im.pt" % (MODELS_OBJ_CLASS, NAME)
 OUTPUT_DIR = "../../output/%s/preds/%s" % (OBJ_CLASS, NAME)
 OUTPUT_PROB_DIR = "%s/prob" % OUTPUT_DIR
 OUTPUT_BINARY_DIR = "%s/binary" % OUTPUT_DIR
 
 VOXEL_RES = 20
 EMBED_SIZE = 64
-BATCH_SIZE = 32
+BATCH_SIZE = 16
 BIN_THRESHES = \
     [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
 
@@ -187,6 +188,26 @@ def test_model(model_ae, model_im, test_dataloader, loss_f):
 def save_model_weights(model, filepath):
     torch.save(model.state_dict(), filepath)
 
+def try_load_weights_manual(model, other_state_dict):
+    new_state_dict = OrderedDict()
+    for k,v in other_state_dict.items():
+        k = k[7:]
+        new_state_dict[k] = v
+    try:
+        model.load_state_dict(new_state_dict)
+        return True
+    except:
+        return False
+    return False
+
+def try_load_weights(model, fp):
+    other_state_dict = torch.load(fp)
+    try:
+        model.load_state_dict(other_state_dict)
+        return True
+    except:
+        return try_load_weights_manual(model, other_state_dict)
+
 #####################
 #    END HELPERS    #
 #####################
@@ -221,8 +242,8 @@ def main():
         model_im = model_im.cuda()
     else:
         log_print("\tIgnoring GPU (CPU only)")
-    model_ae.load_state_dict(torch.load(IN_AE_WEIGHTS_FP))
-    model_im.load_state_dict(torch.load(IN_IM_WEIGHTS_FP))
+    try_load_weights(model_ae, IN_AE_WEIGHTS_FP)
+    try_load_weights(model_im, IN_IM_WEIGHTS_FP)
     cudnn.benchmark = True
 
     # Perform testing and save mats

@@ -117,6 +117,14 @@ def calc_rho_density(M, Y_list, Y_ind_map, Y_im_counts, Y_im_counts_list, sigma_
     total = torch.sum(torch.mul(vals, Y_im_counts_list))
     return total.item()
 
+def voxelize_latents(M_list, thresh):
+    for i in xrange(len(M_list)):
+        M = M_list[i]
+        M[M < thresh] = 0
+        M[M >= thresh] = 1
+        M_list[i] = M
+    return M_list
+
 def init_latents(model_ae, model_im, train_target_dataloader, Y_list, Y_ind_map, Y_im_counts, sigma_2):
 
     if config.VIEW_INIT_LATENTS is not None:
