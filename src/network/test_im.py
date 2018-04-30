@@ -18,22 +18,22 @@ import scipy.io as scio
 from datasets import ImageVoxelDataset
 from models import AE_3D
 
-IOU_ONLY = True
+IOU_ONLY = False
 GPU = True
 MULTI_GPU = True
-MODELS_OBJ_CLASS = "RedwoodRGB_Chair" #use ae,im network models trained on this dataset
+MODELS_OBJ_CLASS = "CHAIR" #use ae,im network models trained on this dataset
 OBJ_CLASS = "RedwoodRGB_Chair" #test on this dataset
-NAME = "tl-supervised-4"
+NAME = "viewtest"
 DATA_BASE_DIR = "../../data/%s" % OBJ_CLASS
-IN_AE_WEIGHTS_FP = "../../output/%s/models/%s/joint_ae3d.pt" % (MODELS_OBJ_CLASS, NAME)
-IN_IM_WEIGHTS_FP = "../../output/%s/models/%s/joint_im.pt" % (MODELS_OBJ_CLASS, NAME)
+IN_AE_WEIGHTS_FP = "../../output/%s/models/%s/view_ae3d_2.pt" % (MODELS_OBJ_CLASS, NAME)
+IN_IM_WEIGHTS_FP = "../../output/%s/models/%s/view_im_2.pt" % (MODELS_OBJ_CLASS, NAME)
 OUTPUT_DIR = "../../output/%s/preds/%s" % (OBJ_CLASS, NAME)
 OUTPUT_PROB_DIR = "%s/prob" % OUTPUT_DIR
 OUTPUT_BINARY_DIR = "%s/binary" % OUTPUT_DIR
 
 VOXEL_RES = 20
 EMBED_SIZE = 64
-BATCH_SIZE = 64
+BATCH_SIZE = 32
 BIN_THRESHES = \
     [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
 
@@ -147,7 +147,10 @@ def test_model(model_ae, model_im, test_dataloader, loss_f):
 
         # Forward pass
         im_embed = model_im(ims).detach()
-        out_voxels = model_ae.module._decode(im_embed).detach()
+        try:
+            out_voxels = model_ae.module._decode(im_embed).detach()
+        except:
+            out_voxels = model_ae._decode(im_embed).detach()
 
         # Calculate loss
         loss = loss_f(out_voxels.float(), voxels.float())

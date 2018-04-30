@@ -246,8 +246,6 @@ def update_latents(model_ae, model_im, target_dataloader, M_list, M_ind_map, M_i
         log_print("\t\tLatent %s (%i/%i)" % (id_, counter, len(M_ind_map)))
         index = M_ind_map[id_]
         M = M_list[index]
-        running_sum = torch.zeros(M.size())
-        num = 0
 
         # Align term one (closest image/label given M_i)
         closest_Y_id = optimal_label(M, Y_list, Y_ind_map)
@@ -255,7 +253,6 @@ def update_latents(model_ae, model_im, target_dataloader, M_list, M_ind_map, M_i
         first_term_num = Y_im_counts[closest_Y_id]
 
         # Align term two (closest M_i given image/label)
-        #running_sum += lambda_align * Y_list[Y_ind_map[closest_Y_id]]
         second_term_M = Y_list[Y_ind_map[closest_Y_id]]
         second_term_num = 1
 

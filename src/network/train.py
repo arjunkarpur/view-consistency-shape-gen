@@ -951,7 +951,7 @@ def train_view():
         log_print("\tEpoch: %i/%i" % (iter_, config.VIEW_EPOCHS+1))
 
         # Recreate dataloader (new subset of src data)
-        log_print("\t  Refreshing src training data")
+        log_print("\t  [%i/%i] Refreshing src training data" % (iter_, config.VIEW_EPOCHS+1))
         train_dataloader = \
             create_fusion_dataloader(
                 train_dataloader.dataset, 
@@ -960,7 +960,7 @@ def train_view():
 
         # Fix latent, optimize network
         for e in xrange(config.VIEW_INNER_EPOCHS):
-            log_print("\t  Optimizing network parameters G() - %i/%i:" % (e+1, config.VIEW_INNER_EPOCHS))
+            log_print("\t  [%i/%i] Optimizing network parameters G() - %i/%i:" % (iter_, config.VIEW_EPOCHS+1, e+1, config.VIEW_INNER_EPOCHS))
             model_ae, model_im = model_view_step(
                 model_ae, model_im, M_list, M_ind_map, train_dataloader, lambda_ae, lambda_view, train=True, optimizer=optimizer)
 
@@ -972,13 +972,13 @@ def train_view():
         M_im_counts = target_dataloader.dataset.im_counts
 
         # Fix network, optimize latent
-        log_print("\t  Optimizing latent configs M:")
+        log_print("\t  [%i/%i] Optimizing latent configs M:" % (iter_, config.VIEW_EPOCHS+1)
         M_list = optim_latent.update_latents(
             model_ae, model_im, target_dataloader, M_list, M_ind_map, M_im_counts, 
             Y_list, Y_ind_map, Y_im_counts, lambda_view, lambda_align)
 
         # Checkpoint weights
-        log_print("\t  Saving epoch %i weights" % iter_)
+        log_print("\t  [%i/%i] Saving epoch %i weights" % (iter_, iter_, config.VIEW_EPOCHS+1))
         save_model_weights(model_ae, "%s_ae3d_%i" % (config.VIEW_RUN_NAME, iter_))
         save_model_weights(model_im, "%s_im_%i" % (config.VIEW_RUN_NAME, iter_))
 
